@@ -397,10 +397,10 @@ function buildHandPanel() {
   p.className = "panel";
   p.innerHTML = `
     <h2>hand <span class="live off">● offline</span></h2>
-    <div class="hint">arrow keys o <code>1</code>/<code>2</code> · oppure i bottoni qui sotto</div>
+    <div class="hint">tastiera: <code>←</code> / <code>→</code> · oppure i bottoni qui sotto</div>
     <div class="hand-pad">
-      <button class="b-left"  data-dir="-1">← LEFT (1)</button>
-      <button class="b-right" data-dir="+1">RIGHT (2) →</button>
+      <button class="b-left"  data-dir="-1">← LEFT</button>
+      <button class="b-right" data-dir="+1">RIGHT →</button>
     </div>
     <div class="hand-stats">
       <span>sent: <b class="cnt">0</b></span>
@@ -439,8 +439,9 @@ function buildHandPanel() {
   window.addEventListener("keydown", e => {
     const tgt = e.target;
     if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA")) return;
-    if (e.key === "ArrowLeft"  || e.key === "1") { fire(-1); e.preventDefault(); }
-    if (e.key === "ArrowRight" || e.key === "2") { fire(+1); e.preventDefault(); }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "ArrowLeft")  { fire(-1); e.preventDefault(); }
+    if (e.key === "ArrowRight") { fire(+1); e.preventDefault(); }
   });
 
   const updateLive = () => {
@@ -460,6 +461,7 @@ function buildPumpPanel() {
   p.className = "panel";
   p.innerHTML = `
     <h2>pump-neck <span class="live off">● offline</span></h2>
+    <div class="hint">tastiera: <code>i</code>/<code>h</code>/<code>d</code> · <code>a</code>/<code>s</code> · <code>1</code>/<code>2</code>/<code>3</code> · <code>+</code>/<code>-</code></div>
     <div class="grid">
       <button data-cmd="i">GONFIA (i)</button>
       <button data-cmd="h">HOLD   (h)</button>
@@ -493,6 +495,22 @@ function buildPumpPanel() {
         ? `inviato '${b.dataset.cmd}' (${new Date().toLocaleTimeString()})`
         : `no WS — non ho mandato '${b.dataset.cmd}'`;
     };
+  });
+
+  // Keyboard: stesso set di comandi accettati dal firmware via seriale.
+  // 1 e 2 sono lasciati liberi qui (non collidono con HAND, che ora usa solo
+  // le frecce). Salta gli input field e i modificatori (Cmd/Ctrl/Alt).
+  const PUMP_KEYS = new Set(['i','h','d','a','s','1','2','3','+','-']);
+  window.addEventListener("keydown", e => {
+    const tgt = e.target;
+    if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA")) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!PUMP_KEYS.has(e.key)) return;
+    const ok = sendTo("pump-neck", e.key);
+    lastCmd.textContent = ok
+      ? `[kbd] '${e.key}' inviato (${new Date().toLocaleTimeString()})`
+      : `[kbd] '${e.key}' — WS pump-neck offline`;
+    e.preventDefault();
   });
 
   const updateLive = () => {
