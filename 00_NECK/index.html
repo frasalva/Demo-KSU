@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOWARDS THE SELF</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  :root { --fg:#f4f4f4; --dim:#6f6f6f; --red:#ff2118; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+  body { font-family: 'Space Mono', 'Courier New', monospace; color: var(--fg); }
+
+  #scene { position: fixed; inset: 0; display: block; }
+
+  .hud { position: fixed; inset: 0; pointer-events: none; color: var(--fg); text-transform: uppercase; }
+  .corner { position: absolute; }
+  .tl-blk { top: 32px; left: 72px; }
+  .tr-blk { top: 32px; right: 72px; text-align: right; }
+  .bl-blk { bottom: 32px; left: 72px; }
+  .br-blk { bottom: 32px; right: 72px; text-align: right; }
+
+  .tag { font-size: 10px; letter-spacing: 3px; color: var(--dim); margin-bottom: 5px; }
+  .big { font-size: 20px; letter-spacing: 2px; font-weight: 700;
+         display: flex; align-items: center; gap: 13px; }
+  .tr-blk .big { justify-content: flex-end; }
+  .data { font-size: 12px; letter-spacing: 1.5px; line-height: 1.85; }
+  .data b { color: var(--dim); font-weight: 400; }
+
+  .rec { width: 11px; height: 11px; border-radius: 50%; background: var(--red);
+         box-shadow: 0 0 10px var(--red); animation: blink 1.3s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .12; } }
+
+  .bracket { position: absolute; width: 40px; height: 40px; border: 1.5px solid var(--fg); opacity: .8; }
+  .b-tl { top: 100px; left: 72px; border-right: none; border-bottom: none; border-radius: 11px 0 0 0; }
+  .b-tr { top: 100px; right: 72px; border-left: none; border-bottom: none; border-radius: 0 11px 0 0; }
+  .b-bl { bottom: 100px; left: 72px; border-right: none; border-top: none; border-radius: 0 0 0 11px; }
+  .b-br { bottom: 100px; right: 72px; border-left: none; border-top: none; border-radius: 0 0 11px 0; }
+
+  .pill { pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 10px;
+          border: 1px solid rgba(255,255,255,.55); border-radius: 100px; padding: 9px 22px;
+          color: var(--fg); background: transparent;
+          font: 700 12px/1 'Space Mono', monospace; letter-spacing: 3px; text-transform: uppercase;
+          transition: opacity .15s, border-color .15s, color .15s, background .15s; }
+  .pill:hover { background: rgba(255,255,255,.07); }
+  .pill.dim   { color: var(--dim); border-color: rgba(255,255,255,.22); }
+  .pill.on    { background: rgba(255,255,255,.10); border-color: var(--fg); color: var(--fg); }
+  .pill .dot  { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); }
+  .pill.on .dot { background: var(--fg); box-shadow: 0 0 8px var(--fg); }
+
+  .settings { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+              background: rgba(0,0,0,.78); z-index: 9; pointer-events: auto; }
+  .settings.show { display: flex; }
+  .panel { width: min(640px, 86vw); border: 1px solid rgba(255,255,255,.35); border-radius: 4px;
+           padding: 38px 44px; background: rgba(0,0,0,.85);
+           display: flex; flex-direction: column; gap: 28px; }
+  .panel h2 { font-size: 11px; letter-spacing: 4px; color: var(--dim); font-weight: 400;
+              text-transform: uppercase; margin-bottom: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+  .sens { display: flex; flex-direction: column; gap: 10px; }
+  .sens-track { display: flex; align-items: center; gap: 14px; }
+  .sens input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; height: 2px;
+                            background: rgba(255,255,255,.3); outline: none; }
+  .sens input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px;
+                            border-radius: 50%; background: var(--fg); cursor: pointer; }
+  .sens input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%;
+                            background: var(--fg); cursor: pointer; }
+  .sens-val { font-size: 12px; letter-spacing: 2px; color: var(--dim); min-width: 60px; text-align: right; }
+
+  .alert { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%);
+           pointer-events: none; opacity: 0; transition: opacity .12s; z-index: 5; }
+  .alert.show { opacity: 1; animation: alertBlink .55s steps(1) infinite; }
+  @keyframes alertBlink { 50% { opacity: .35; } }
+  .alert .pill { border-color: var(--red); color: var(--red); }
+  .alert .pill .dot { background: var(--red); box-shadow: 0 0 10px var(--red); }
+
+  .enable { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,.7); z-index: 20;
+            color: var(--fg); text-transform: uppercase; }
+  .enable.hide { display: none; }
+  .enable-box { border: 1px solid rgba(255,255,255,.3); padding: 32px 40px; border-radius: 4px;
+                background: rgba(0,0,0,.5);
+                display: flex; flex-direction: column; gap: 22px; align-items: center; }
+  .enable-box h2 { font-size: 11px; letter-spacing: 4px; color: var(--dim);
+                   font-weight: 400; text-transform: uppercase; }
+
+  .top-bar { position: fixed; top: 32px; left: 50%; transform: translateX(-50%);
+             display: flex; gap: 10px; z-index: 8; }
+
+  .fx { position: fixed; inset: 0; pointer-events: none; }
+  .fx.scan { background: repeating-linear-gradient(to bottom,
+             rgba(255,255,255,.035) 0 1px, transparent 1px 3px); mix-blend-mode: overlay; }
+  .fx.vig  { box-shadow: inset 0 0 240px 50px rgba(0,0,0,.92); }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div class="fx vig"></div>
+  <div class="fx scan"></div>
+
+  <div class="hud">
+    <div class="corner tl-blk">
+      <div class="tag">// subject</div>
+      <div class="big">GUEST.02</div>
+    </div>
+    <div class="corner tr-blk">
+      <div class="tag">rec <span id="tc">00:00:00:00</span></div>
+      <div class="big">TOWARDS THE SELF <span class="rec"></span></div>
+    </div>
+
+    <div class="bracket b-tl"></div>
+    <div class="bracket b-tr"></div>
+    <div class="bracket b-bl"></div>
+    <div class="bracket b-br"></div>
+
+    <div class="corner bl-blk">
+      <div class="data"><b>level</b> <span id="level">-60 db</span><br>
+                       <b>peak</b>&nbsp; <span id="peak">-60 db</span></div>
+    </div>
+    <div class="corner br-blk">
+      <div class="data"><b>freq</b> <span id="freq">0000 hz</span><br>
+                       <b>src</b>&nbsp; <span id="src">idle</span></div>
+    </div>
+  </div>
+
+  <div class="top-bar">
+    <button class="pill" id="settingsBtn"><span class="dot"></span> settings</button>
+  </div>
+
+  <div class="enable" id="enable">
+    <div class="enable-box">
+      <h2>// tap to begin</h2>
+      <button class="pill" id="enableBtn"><span class="dot"></span> enter</button>
+    </div>
+  </div>
+
+  <div class="alert" id="alert">
+    <span class="pill"><span class="dot"></span> <span id="alertText">// be quiet</span></span>
+  </div>
+
+  <div class="settings" id="settings">
+    <div class="panel">
+      <div class="sens">
+        <h2>// sensitivity <span id="sensLabel" style="color:var(--dim)">low &middot; high</span></h2>
+        <div class="sens-track">
+          <input type="range" id="sens" min="0" max="100" value="50">
+          <span class="sens-val" id="sensVal">50%</span>
+        </div>
+      </div>
+
+      <div class="row" style="justify-content:flex-end; margin-top: 6px;">
+        <button class="pill" id="closeBtn">close</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+const elTC = document.getElementById('tc');
+const elLevel = document.getElementById('level');
+const elPeak = document.getElementById('peak');
+const elFreq = document.getElementById('freq');
+const elSrc = document.getElementById('src');
+const settingsEl = document.getElementById('settings');
+const settingsBtn = document.getElementById('settingsBtn');
+const closeBtn = document.getElementById('closeBtn');
+const sensEl = document.getElementById('sens');
+const sensVal = document.getElementById('sensVal');
+const alertEl = document.getElementById('alert');
+const alertText = document.getElementById('alertText');
+const enableEl = document.getElementById('enable');
+const enableBtn = document.getElementById('enableBtn');
+
+const CELL = 10;
+const FONT = 11;
+const RAMP = " .:-=+*oO#%@";
+const STYLES = [
+  'rgba(255,255,255,0.28)','rgba(255,255,255,0.40)','rgba(255,255,255,0.52)',
+  'rgba(255,255,255,0.64)','rgba(255,255,255,0.74)','rgba(255,255,255,0.82)',
+  'rgba(255,255,255,0.90)','rgba(255,255,255,1.00)',
+];
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+const state = {
+  source: null,         // 'computer' | null
+  sensitivity: 0.5,
+};
+
+let audioCtx = null;
+let analyser = null;
+let analyserBytes = null;
+let micStream = null;
+const BINS = 96;
+let sampleRate = 44100;
+
+async function ensureAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  if (!analyser) {
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.78;
+    analyserBytes = new Uint8Array(analyser.frequencyBinCount);
+  }
+  sampleRate = audioCtx.sampleRate;
+}
+
+async function selectComputerMic() {
+  try {
+    await ensureAudioCtx();
+    if (micStream) { for (const t of micStream.getTracks()) t.stop(); }
+    if (analyser)  { try { analyser.disconnect(); } catch {} }
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const src = audioCtx.createMediaStreamSource(micStream);
+    src.connect(analyser);
+    state.source = 'computer';
+    elSrc.textContent = 'computer';
+  } catch (e) {
+    console.warn('[mic] denied/blocked', e);
+    elSrc.textContent = 'denied';
+  }
+}
+
+// Settings panel
+settingsBtn.addEventListener('click', () => settingsEl.classList.add('show'));
+closeBtn.addEventListener('click', () => settingsEl.classList.remove('show'));
+sensEl.addEventListener('input', () => {
+  state.sensitivity = sensEl.value / 100;
+  sensVal.textContent = sensEl.value + '%';
+});
+
+// Intro overlay: first tap unlocks getUserMedia on iPad/Safari.
+enableBtn.addEventListener('click', async () => {
+  enableEl.classList.add('hide');
+  await selectComputerMic();
+});
+
+const NA = 240;
+const deform = new Float32Array(NA);
+let levelSmooth = 0, peak = 0;
+const startTime = performance.now();
+let overThreshold = false;
+
+function currentBins() {
+  if (state.source === 'computer' && analyser) {
+    analyser.getByteFrequencyData(analyserBytes);
+    return analyserBytes;
+  }
+  return null;
+}
+
+function buildDeform(now) {
+  const raw = new Float32Array(NA);
+  const bins = currentBins();
+  let level = 0, domBin = 0, domVal = 0;
+
+  if (bins) {
+    const used = Math.min(bins.length, 96);
+    for (let i = 0; i < NA; i++) {
+      const t = Math.abs((i / NA) * 2 - 1);
+      const bin = Math.floor(t * (used - 1));
+      raw[i] = bins[bin] / 255;
+    }
+    for (let i = 0; i < used; i++) {
+      level += bins[i];
+      if (bins[i] > domVal) { domVal = bins[i]; domBin = i; }
+    }
+    level = level / (used * 255);
+  } else {
+    const tm = now / 1000;
+    for (let i = 0; i < NA; i++) {
+      const a = (i / NA) * Math.PI * 2;
+      raw[i] = 0.22 + 0.10 * Math.sin(a * 3 + tm * 1.3)
+                    + 0.06 * Math.sin(a * 5 - tm * 0.8);
+    }
+    level = 0.18 + 0.05 * Math.sin(tm * 1.7);
+    domBin = 6 + 4 * Math.sin(tm);
+  }
+
+  const gain = 0.5 + state.sensitivity * 2.0;
+  for (let i = 0; i < NA; i++) raw[i] = Math.min(1, raw[i] * gain);
+  level = Math.min(1, level * gain);
+
+  const sm = new Float32Array(NA);
+  const K = 9;
+  for (let i = 0; i < NA; i++) {
+    let s = 0;
+    for (let k = -K; k <= K; k++) s += raw[(i + k + NA) % NA];
+    sm[i] = s / (2 * K + 1);
+  }
+  for (let i = 0; i < NA; i++) deform[i] += (sm[i] - deform[i]) * 0.2;
+
+  levelSmooth += (level - levelSmooth) * 0.18;
+  peak = Math.max(peak * 0.992, levelSmooth);
+  const domHz = domBin * sampleRate / 512;
+  return { domHz };
+}
+
+function radiusAt(th, baseR, rot) {
+  const a = ((th + rot) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+  const f = a / (Math.PI * 2) * NA;
+  const i0 = Math.floor(f) % NA, i1 = (i0 + 1) % NA;
+  const fr = f - Math.floor(f);
+  const d = deform[i0] * (1 - fr) + deform[i1] * fr;
+  return baseR + levelSmooth * 90 + d * (60 + levelSmooth * 300);
+}
+
+function frame(now) {
+  const W = window.innerWidth, H = window.innerHeight;
+  const cx = W / 2, cy = H / 2;
+  const { domHz } = buildDeform(now);
+  const rot = now / 6000;
+
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 6]);
+  ctx.beginPath();
+  ctx.moveTo(0, cy); ctx.lineTo(W, cy);
+  ctx.moveTo(cx, 0); ctx.lineTo(cx, H);
+  ctx.stroke();
+
+  const base = Math.min(W, H);
+  const rings = [
+    { r: base * 0.12, label: 'ACCEPTED THRESHOLD', kind: 'accepted' },
+    { r: base * 0.26, label: 'REJECTED THRESHOLD', kind: 'rejected' },
+    { r: base * 0.40, label: '', kind: 'outer' },
+  ];
+
+  // visual-only threshold (no side effects, no MCU, no bus)
+  const rejectedLevel = 0.55;
+  overThreshold = levelSmooth > rejectedLevel;
+  const blinkOn = overThreshold && (Math.floor(now / 130) % 2 === 0);
+
+  ctx.font = "10px 'Space Mono', monospace";
+  ctx.textAlign = 'center';
+  for (const ring of rings) {
+    if (ring.kind === 'rejected' && overThreshold) {
+      ctx.strokeStyle = blinkOn ? 'rgba(255,33,24,0.95)' : 'rgba(255,33,24,0.25)';
+      ctx.lineWidth = 1.5;
+    } else {
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 1;
+    }
+    ctx.beginPath();
+    ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
+    ctx.stroke();
+    if (ring.label) {
+      const isRej = ring.kind === 'rejected' && overThreshold;
+      ctx.fillStyle = isRej ? 'rgba(255,33,24,0.85)' : 'rgba(255,255,255,0.42)';
+      ctx.fillText(ring.label, cx, cy + ring.r + 15);
+    }
+  }
+  ctx.setLineDash([]);
+
+  ctx.font = FONT + "px 'Courier New', monospace";
+  ctx.textBaseline = 'middle';
+  ctx.shadowBlur = 0;
+  const baseR = 26;
+  const maxR = baseR + levelSmooth * 90 + 60 + levelSmooth * 300 + 8;
+  const NB = STYLES.length;
+  let curStyle = -1;
+  for (let py = cy - maxR; py <= cy + maxR; py += CELL) {
+    for (let px = cx - maxR; px <= cx + maxR; px += CELL) {
+      const dx = px - cx, dy = py - cy;
+      const r2 = dx * dx + dy * dy;
+      const blobR = radiusAt(Math.atan2(dy, dx), baseR, rot);
+      if (r2 > blobR * blobR) continue;
+      const intensity = Math.sqrt((blobR - Math.sqrt(r2)) / blobR);
+      const charIdx = Math.min(RAMP.length - 1, (intensity * RAMP.length) | 0);
+      const ch = RAMP[charIdx];
+      if (ch === ' ') continue;
+      const sIdx = Math.min(NB - 1, (intensity * NB) | 0);
+      if (sIdx !== curStyle) { ctx.fillStyle = STYLES[sIdx]; curStyle = sIdx; }
+      ctx.fillText(ch, px, py);
+    }
+  }
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  const db = v => Math.round(-60 + Math.min(1, v * 1.6) * 60);
+  elLevel.textContent = db(levelSmooth) + ' db';
+  elPeak.textContent = db(peak) + ' db';
+  elFreq.textContent = String(Math.round(domHz)).padStart(4, '0') + ' hz';
+  const el = (now - startTime) / 1000;
+  const pad = n => String(n).padStart(2, '0');
+  elTC.textContent = `${pad(Math.floor(el/3600))}:${pad(Math.floor(el/60)%60)}:${pad(Math.floor(el)%60)}:${pad(Math.floor(el*30)%30)}`;
+
+  if (overThreshold) {
+    const variant = (Math.floor(now / 1100) % 2 === 0) ? '// be quiet' : '// too noisy';
+    alertText.textContent = variant;
+    alertEl.classList.add('show');
+  } else {
+    alertEl.classList.remove('show');
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

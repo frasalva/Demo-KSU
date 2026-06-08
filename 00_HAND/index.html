@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOWARDS THE OUTER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  :root { --fg:#f4f4f4; --dim:#6f6f6f; --red:#ff2118; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+  body { font-family: 'Space Mono', 'Courier New', monospace; }
+
+  #scene { position: fixed; inset: 0; display: block; }
+
+  .hud { position: fixed; inset: 0; pointer-events: none; color: var(--fg);
+         text-transform: uppercase; }
+  .corner { position: absolute; }
+  .tl-blk { top: 32px; left: 72px; }
+  .tr-blk { top: 32px; right: 72px; text-align: right; }
+  .bl-blk { bottom: 32px; left: 72px; }
+  .br-blk { bottom: 32px; right: 72px; text-align: right; }
+
+  .tag { font-size: 10px; letter-spacing: 3px; color: var(--dim); margin-bottom: 5px; }
+  .big { font-size: 20px; letter-spacing: 2px; font-weight: 700;
+         display: flex; align-items: center; gap: 13px; }
+  .tr-blk .big { justify-content: flex-end; }
+  .data { font-size: 12px; letter-spacing: 1.5px; line-height: 1.85; }
+  .data b { color: var(--dim); font-weight: 400; }
+
+  .rec { width: 11px; height: 11px; border-radius: 50%; background: var(--red);
+         box-shadow: 0 0 10px var(--red); animation: blink 1.3s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .12; } }
+
+  .bracket { position: absolute; width: 40px; height: 40px; border: 1.5px solid var(--fg); opacity: .8; }
+  .b-tl { top: 100px; left: 72px; border-right: none; border-bottom: none; border-radius: 11px 0 0 0; }
+  .b-tr { top: 100px; right: 72px; border-left: none; border-bottom: none; border-radius: 0 11px 0 0; }
+  .b-bl { bottom: 100px; left: 72px; border-right: none; border-top: none; border-radius: 0 0 0 11px; }
+  .b-br { bottom: 100px; right: 72px; border-left: none; border-top: none; border-radius: 0 0 11px 0; }
+
+  .fx { position: fixed; inset: 0; pointer-events: none; }
+  .fx.scan { background: repeating-linear-gradient(to bottom,
+             rgba(255,255,255,.035) 0 1px, transparent 1px 3px); mix-blend-mode: overlay; }
+  .fx.vig { box-shadow: inset 0 0 240px 50px rgba(0,0,0,.92); }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div class="fx vig"></div>
+  <div class="fx scan"></div>
+
+  <div class="hud">
+    <div class="corner tl-blk">
+      <div class="tag">// subject</div>
+      <div class="big">GUEST.01</div>
+    </div>
+    <div class="corner tr-blk">
+      <div class="tag">rec <span id="tc">00:00:00:00</span></div>
+      <div class="big">TOWARDS THE OUTER <span class="rec"></span></div>
+    </div>
+
+    <div class="bracket b-tl"></div>
+    <div class="bracket b-tr"></div>
+    <div class="bracket b-bl"></div>
+    <div class="bracket b-br"></div>
+
+    <div class="corner bl-blk">
+      <div class="data"><b>coord</b> <span id="coord">+0000 / +0000</span><br>
+                       <b>head</b>&nbsp; <span id="hdg">000°</span></div>
+    </div>
+    <div class="corner br-blk">
+      <div class="data"><b>dist</b> <span id="dist">0.0 km</span><br>
+                       <b>sig</b>&nbsp; <span id="sig">000</span></div>
+    </div>
+  </div>
+
+<script>
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+const elTC = document.getElementById('tc');
+const elCoord = document.getElementById('coord');
+const elHdg = document.getElementById('hdg');
+const elDist = document.getElementById('dist');
+const elSig = document.getElementById('sig');
+let signals = 0;
+const startTime = performance.now();
+const fmt = v => (v >= 0 ? '+' : '-') + String(Math.abs(Math.round(v))).padStart(4, '0');
+
+const CELL = 11;
+const FONT = 11;
+const CLEARING = 34;
+const ICON_DROP = 64;
+let cols, rows;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cols = Math.ceil(window.innerWidth / CELL) + 2;
+  rows = Math.ceil(window.innerHeight / CELL) + 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- deterministic hash noise (infinite, stable world) ---
+function hash(x, y) {
+  let h = x * 374761393 + y * 668265263;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h = h ^ (h >> 16);
+  return ((h >>> 0) % 100000) / 100000;
+}
+function noise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi, yf = y - yi;
+  const tl = hash(xi, yi),     tr = hash(xi + 1, yi);
+  const bl = hash(xi, yi + 1), br = hash(xi + 1, yi + 1);
+  const sx = xf * xf * (3 - 2 * xf), sy = yf * yf * (3 - 2 * yf);
+  const top = tl + (tr - tl) * sx;
+  const bot = bl + (br - bl) * sx;
+  return top + (bot - top) * sy;
+}
+function fbm(x, y) {
+  let v = 0, amp = 0.5, freq = 1;
+  for (let i = 0; i < 4; i++) { v += noise(x * freq, y * freq) * amp; amp *= 0.5; freq *= 2; }
+  return v;
+}
+
+const TREES = ['o', 'O', '#', '%', '@'];
+const SHRUB = ['=', '+', '*'];
+const GROUND = ['.', ':', '-'];
+
+function worldCell(wx, wy) {
+  const d = fbm(wx * 0.08, wy * 0.08);
+  const detail = hash(wx, wy);
+  if (d > 0.56) {
+    const ch = TREES[Math.floor(detail * TREES.length)];
+    const g = 110 + Math.floor(d * 120);
+    return { ch, color: `rgb(${Math.floor(g*0.4)},${g},${Math.floor(g*0.4)})` };
+  } else if (d > 0.48) {
+    return { ch: SHRUB[Math.floor(detail * SHRUB.length)], color: '#3f6b40' };
+  } else if (detail > 0.62) {
+    return { ch: GROUND[Math.floor(hash(wy, wx) * GROUND.length)], color: '#2c322c' };
+  }
+  return null;
+}
+
+// --- icon state ---
+let posX = 0, posY = 0;
+let course = -Math.PI / 2;
+let courseTarget = -Math.PI / 2;
+let traveled = 0;
+const SPEED = 1.1;
+const STEER_STEP = 0.6;
+let last = performance.now();
+
+const trail = [];
+
+const ripples = [];
+const RIPPLE_LIFE = 2600;
+const RIPPLE_SPEED = 0.013;
+const RIPPLE_MAX_R = 12;
+const RIPPLE_DRIFT = 10;
+const RIPPLE_GLYPHS = ['◦', '∘', '○', '◯'];
+
+let deviation = null;
+const DEVIATION_LIFE = 1400;
+
+// emitSignal: visualization only. Triggered by NetBus messages from the
+// control page (which is the only thing that talks to the MCU).
+function emitSignal(dir) {                              // -1 left, +1 right
+  const hx = cols / 2, hy = rows / 2;
+  const m = RIPPLE_MAX_R;
+  const xlo = m + 1, xhi = Math.max(xlo + 1, hx - m - 1);
+  const offX = dir * (xlo + Math.random() * (xhi - xlo));
+  const ylo = -(hy - m - 1);
+  const yhi = Math.max(ylo, -(m + RIPPLE_DRIFT + 1));
+  const offY = ylo + Math.random() * (yhi - ylo);
+  ripples.push({ wx: posX + offX, wy: posY + offY, t0: performance.now() });
+  deviation = { fromAng: courseTarget, t0: performance.now() };
+  courseTarget += dir * STEER_STEP;
+  signals++;
+}
+
+// ============================================================================
+// NetBus — listen for `hand.signal` from the control page and run the visual
+// pulse only. The control page already fires the MCU relay over its own ws://
+// connection; this page just reflects the gesture.
+// Discovery: ?bus=host:port  OR  ws://<page hostname>:8090/
+// ============================================================================
+class NetBus extends EventTarget {
+  constructor(url) {
+    super();
+    this.url = url || (() => {
+      const q = new URLSearchParams(location.search).get('bus');
+      if (q) return /^wss?:/.test(q) ? q : `ws://${q}/`;
+      if (window.BUS_URL) return window.BUS_URL;
+      return `ws://${location.hostname || 'localhost'}:8090/`;
+    })();
+    this._connect();
+  }
+  _connect() {
+    try { this.ws = new WebSocket(this.url); }
+    catch { return setTimeout(() => this._connect(), 2000); }
+    this.ws.onopen = () => console.log('[bus] open', this.url);
+    this.ws.onmessage = (ev) => {
+      let data; try { data = JSON.parse(ev.data); } catch { data = ev.data; }
+      this.dispatchEvent(new MessageEvent('message', { data }));
+    };
+    this.ws.onclose = () => setTimeout(() => this._connect(), 2000);
+    this.ws.onerror = () => {};
+  }
+}
+try {
+  const bus = new NetBus();
+  bus.addEventListener('message', (ev) => {
+    const m = ev.data || {};
+    if (m.type === 'hand.signal' && (m.dir === -1 || m.dir === 1)) emitSignal(m.dir);
+  });
+} catch (e) { console.log('[bus] NetBus non disponibile', e); }
+
+function rippleAt(wx, wy, now) {
+  let best = null;
+  for (const rp of ripples) {
+    const age = now - rp.t0;
+    const radius = Math.min(age * RIPPLE_SPEED, RIPPLE_MAX_R);
+    const dx = wx - rp.wx, dy = wy - rp.wy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const band = Math.abs(dist - radius);
+    if (band < 1.3) {
+      const life = 1 - age / RIPPLE_LIFE;
+      const strength = (1 - band / 1.3) * life;
+      if (!best || strength > best.strength) best = { strength, life };
+    }
+  }
+  if (!best) return null;
+  const gi = Math.min(RIPPLE_GLYPHS.length - 1,
+                      Math.floor((1 - best.life) * RIPPLE_GLYPHS.length));
+  const v = Math.floor(120 + best.strength * 135);
+  const alpha = Math.pow(best.life, 1.5);
+  return { ch: RIPPLE_GLYPHS[gi], color: `rgba(${Math.floor(v*0.7)},${v},${v},${alpha.toFixed(3)})` };
+}
+
+function frame(now) {
+  const dt = Math.min((now - last) / 16.67, 3);
+  last = now;
+
+  course += (courseTarget - course) * Math.min(1, 0.12 * dt);
+  const step = SPEED * dt * 0.05;
+  posX += Math.cos(course) * step;
+  posY += Math.sin(course) * step;
+  traveled += step;
+
+  if (!trail.length || Math.hypot(posX - trail[trail.length-1].x, posY - trail[trail.length-1].y) > 1.5) {
+    trail.push({ x: posX, y: posY });
+    if (trail.length > 120) trail.shift();
+  }
+
+  const camX = posX, camY = posY;
+  const halfC = cols / 2, halfR = rows / 2;
+  const originX = window.innerWidth / 2;
+  const originY = window.innerHeight / 2;
+  const iconX = originX, iconY = originY + ICON_DROP;
+
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  ctx.font = FONT + "px 'Courier New', monospace";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  ctx.fillStyle = '#444';
+  for (const tp of trail) {
+    const sx = originX + (tp.x - camX) * CELL;
+    const sy = originY + (tp.y - camY) * CELL;
+    if (sx < -20 || sx > window.innerWidth + 20 || sy < -20 || sy > window.innerHeight + 20) continue;
+    ctx.fillText('·', sx, sy);
+  }
+
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    if (now - ripples[i].t0 > RIPPLE_LIFE) ripples.splice(i, 1);
+  }
+
+  for (let r = -1; r < rows; r++) {
+    for (let c = -1; c < cols; c++) {
+      const wx = Math.round(camX - halfC + c);
+      const wy = Math.round(camY - halfR + r);
+      const sx = originX + (wx - camX) * CELL;
+      const sy = originY + (wy - camY) * CELL;
+      if ((sx - iconX) ** 2 + (sy - iconY) ** 2 < CLEARING * CLEARING) continue;
+      const base = worldCell(wx, wy);
+      if (base) { ctx.fillStyle = base.color; ctx.fillText(base.ch, sx, sy); }
+      const rip = rippleAt(wx, wy, now);
+      if (rip) { ctx.fillStyle = rip.color; ctx.fillText(rip.ch, sx, sy); }
+    }
+  }
+
+  const fade = ctx.createLinearGradient(0, window.innerHeight * 0.4, 0, window.innerHeight);
+  fade.addColorStop(0, 'rgba(0,0,0,0)');
+  fade.addColorStop(1, 'rgba(0,0,0,0.96)');
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+  if (deviation) {
+    const age = now - deviation.t0;
+    if (age < DEVIATION_LIFE) {
+      const k = 1 - age / DEVIATION_LIFE;
+      const d2 = Math.atan2(Math.sin(course - deviation.fromAng), Math.cos(course - deviation.fromAng));
+      ctx.strokeStyle = `rgba(255,33,24,${(0.95 * k).toFixed(3)})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(iconX, iconY, 34, deviation.fromAng, course, d2 < 0);
+      ctx.stroke();
+    } else {
+      deviation = null;
+    }
+  }
+
+  ctx.save();
+  ctx.translate(iconX, iconY);
+  ctx.rotate(course + Math.PI / 2);
+  ctx.fillStyle = '#ff2118';
+  ctx.strokeStyle = '#ff2118';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 4;
+  ctx.shadowColor = 'rgba(255,55,45,0.85)';
+  ctx.shadowBlur = 7;
+  ctx.beginPath();
+  ctx.moveTo(0, -6);
+  ctx.lineTo(5.5, 5);
+  ctx.lineTo(-5.5, 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(iconX, iconY, 26, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,33,24,0.35)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  const deg = ((course * 180 / Math.PI) + 90 + 360) % 360;
+  elHdg.textContent = String(Math.round(deg)).padStart(3, '0') + '°';
+  elDist.textContent = (traveled * 0.05).toFixed(1) + ' km';
+  elCoord.textContent = fmt(posX) + ' / ' + fmt(-posY);
+  elSig.textContent = String(signals).padStart(3, '0');
+  const el = (now - startTime) / 1000;
+  const pad = n => String(n).padStart(2, '0');
+  elTC.textContent = `${pad(Math.floor(el/3600))}:${pad(Math.floor(el/60)%60)}:${pad(Math.floor(el)%60)}:${pad(Math.floor(el*30)%30)}`;
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

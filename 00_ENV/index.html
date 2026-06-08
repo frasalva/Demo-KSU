@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOWARDS THE OTHER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  :root { --fg:#f4f4f4; --dim:#6f6f6f; --red:#ff2118; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+  body { font-family: 'Space Mono', 'Courier New', monospace; }
+
+  #scene { position: fixed; inset: 0; display: block; cursor: grab; }
+  #scene.grabbing { cursor: grabbing; }
+
+  .hud { position: fixed; inset: 0; pointer-events: none; color: var(--fg);
+         text-transform: uppercase; }
+  .corner { position: absolute; }
+  .tl-blk { top: 32px; left: 72px; }
+  .tr-blk { top: 32px; right: 72px; text-align: right; }
+  .bl-blk { bottom: 32px; left: 72px; }
+  .br-blk { bottom: 32px; right: 72px; text-align: right; }
+
+  .tag { font-size: 10px; letter-spacing: 3px; color: var(--dim); margin-bottom: 5px; }
+  .big { font-size: 20px; letter-spacing: 2px; font-weight: 700;
+         display: flex; align-items: center; gap: 13px; }
+  .tr-blk .big { justify-content: flex-end; }
+  .data { font-size: 12px; letter-spacing: 1.5px; line-height: 1.85; }
+  .data b { color: var(--dim); font-weight: 400; }
+  .bval { font-size: 14px; letter-spacing: 1.5px; margin-top: 2px; }
+
+  .rec { width: 11px; height: 11px; border-radius: 50%; background: var(--red);
+         box-shadow: 0 0 10px var(--red); animation: blink 1.3s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .12; } }
+
+  .bracket { position: absolute; width: 40px; height: 40px; border: 1.5px solid var(--fg); opacity: .8; }
+  .b-tl { top: 100px; left: 72px; border-right: none; border-bottom: none; border-radius: 11px 0 0 0; }
+  .b-tr { top: 100px; right: 72px; border-left: none; border-bottom: none; border-radius: 0 11px 0 0; }
+  .b-bl { bottom: 100px; left: 72px; border-right: none; border-top: none; border-radius: 0 0 0 11px; }
+  .b-br { bottom: 100px; right: 72px; border-left: none; border-top: none; border-radius: 0 0 11px 0; }
+
+  .device-label { position: fixed; transform: translate(-50%, 0);
+                  color: var(--fg); font-size: 13px; letter-spacing: 3px;
+                  text-transform: uppercase; pointer-events: none;
+                  text-align: center; white-space: nowrap;
+                  font-weight: 700; transition: opacity .2s; }
+
+  .toggle { display: inline-flex; border: 1px solid var(--dim);
+            border-radius: 4px; overflow: hidden; pointer-events: auto;
+            background: rgba(0,0,0,.5); }
+  .toggle .opt { background: transparent; border: none; color: var(--dim);
+                 font-family: inherit; font-size: 11px; letter-spacing: 2px;
+                 text-transform: uppercase; padding: 7px 13px;
+                 cursor: pointer; transition: color .15s, background .15s;
+                 font-weight: 700; }
+  .toggle .opt:hover { color: var(--fg); }
+  .toggle .opt.active { color: var(--fg);
+                        background: rgba(255, 33, 24, 0.18); }
+  .toggle .opt + .opt { border-left: 1px solid var(--dim); }
+
+  .playback-title { margin-top: 10px; color: var(--red); font-size: 11px;
+                    letter-spacing: 3px; font-weight: 700;
+                    text-transform: uppercase; opacity: 0;
+                    transition: opacity .25s; }
+  .playback-title.on { opacity: 1; }
+
+  /* intro overlay */
+  .enable { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,.7); z-index: 20;
+            color: var(--fg); text-transform: uppercase; pointer-events: auto; }
+  .enable.hide { display: none; }
+  .enable-box { border: 1px solid rgba(255,255,255,.3); padding: 32px 40px; border-radius: 4px;
+                background: rgba(0,0,0,.5);
+                display: flex; flex-direction: column; gap: 22px; align-items: center; }
+  .enable-box h2 { font-size: 11px; letter-spacing: 4px; color: var(--dim);
+                   font-weight: 400; text-transform: uppercase; }
+  .enable .pill { cursor: pointer; display: inline-flex; align-items: center; gap: 10px;
+                  border: 1px solid rgba(255,255,255,.55); border-radius: 100px; padding: 9px 22px;
+                  color: var(--fg); background: transparent;
+                  font: 700 12px/1 'Space Mono', monospace; letter-spacing: 3px; text-transform: uppercase; }
+  .enable .pill:hover { background: rgba(255,255,255,.07); }
+
+  .fx { position: fixed; inset: 0; pointer-events: none; }
+  .fx.scan { background: repeating-linear-gradient(to bottom,
+             rgba(255,255,255,.035) 0 1px, transparent 1px 3px); mix-blend-mode: overlay; }
+  .fx.vig { box-shadow: inset 0 0 240px 50px rgba(0,0,0,.92); }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div class="fx vig"></div>
+  <div class="fx scan"></div>
+
+  <div class="hud">
+    <div class="corner tl-blk">
+      <div class="tag">// subject</div>
+      <div class="big">GUEST.03</div>
+    </div>
+    <div class="corner tr-blk">
+      <div class="tag">rec <span id="tc">00:00:00:00</span></div>
+      <div class="big">TOWARDS THE OTHER <span class="rec"></span></div>
+    </div>
+
+    <div class="bracket b-tl"></div>
+    <div class="bracket b-tr"></div>
+    <div class="bracket b-bl"></div>
+    <div class="bracket b-br"></div>
+
+    <div class="corner bl-blk">
+      <div class="tag">// source</div>
+      <div class="bval" id="envName">environmental.02</div>
+    </div>
+
+    <div class="device-label" id="lbl0">BRUIT_CALL</div>
+    <div class="device-label" id="lbl1">
+      <div class="toggle">
+        <button class="opt" data-src="computer">Computer</button>
+        <button class="opt" data-src="playback">Playback</button>
+      </div>
+      <div class="playback-title" id="lbl1Title"></div>
+    </div>
+    <div class="device-label" id="lbl2">MOURNING_DOVE</div>
+    <div class="corner br-blk">
+      <div class="tag">// proximity</div>
+      <div class="bval" id="distance">0 meters away</div>
+    </div>
+  </div>
+
+  <!-- Safari/iPad require a user gesture before getUserMedia() and AudioContext.
+       The overlay swallows the first tap and unlocks both. -->
+  <div class="enable" id="enable">
+    <div class="enable-box">
+      <h2>// tap to begin</h2>
+      <button class="pill" id="enableBtn">enter</button>
+    </div>
+  </div>
+
+<script>
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+const elTC = document.getElementById('tc');
+const elEnv = document.getElementById('envName');
+const elDist = document.getElementById('distance');
+const deviceLabels = [
+  document.getElementById('lbl0'),
+  document.getElementById('lbl1'),
+  document.getElementById('lbl2'),
+];
+
+const RAMP = " .:-=+*oO#%";
+const FONT = 12;
+
+// Sorgente del device centrale:
+//   'computer' = AnalyserNode del microfono dell'iPad/laptop
+//   'playback' = riproduce PLAYBACK_SRC dalle casse, il mic lo ricapta
+let centerSource = 'computer';
+
+const PLAYBACK_SRC   = 'sample3_mourningDove.mp3';
+const PLAYBACK_TITLE = 'MOURNING_DOVE';
+
+const lbl1Title = document.getElementById('lbl1Title');
+lbl1Title.textContent = PLAYBACK_TITLE;
+
+let W = window.innerWidth, H = window.innerHeight;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+let actx = null, analyser = null, freqBytes = null, sampleRate = 44100, fftSize = 1024;
+let micReady = false;
+let audioEl = null, currentTrack = null, currentMode = 'standby', running = false;
+
+async function ensureMic() {
+  if (micReady) return true;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') await actx.resume();
+    sampleRate = actx.sampleRate;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+    const src = actx.createMediaStreamSource(stream);
+    analyser = actx.createAnalyser();
+    analyser.fftSize = fftSize;
+    analyser.smoothingTimeConstant = 0.7;
+    src.connect(analyser);
+    freqBytes = new Uint8Array(analyser.frequencyBinCount);
+    micReady = true;
+    return true;
+  } catch (e) {
+    console.warn('[mic] denied/blocked', e);
+    return false;
+  }
+}
+
+function clearCloud() {
+  nodes.length = 0; edges.length = 0;
+  seqCounter = 0; lastSpawn = 0; levelSmooth = 0; peak = 0;
+  focusX = focusY = focusZ = 0;
+}
+function stopTrack() {
+  if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; }
+  currentTrack = null;
+}
+async function startMic() {
+  if (!(await ensureMic())) return;
+  stopTrack();
+  clearCloud();
+  if (centerSource === 'playback') {
+    if (!audioEl) audioEl = new Audio();
+    audioEl.src  = PLAYBACK_SRC;
+    audioEl.loop = true;
+    audioEl.play().catch(e => console.error('[playback]', e));
+    currentTrack = PLAYBACK_SRC;
+  }
+  running = true;
+  currentMode = 'mic';
+}
+async function playPreset(url, key) {
+  if (!(await ensureMic())) return;
+  if (!audioEl) audioEl = new Audio();
+  stopTrack();
+  audioEl.src = url;
+  audioEl.play().catch(() => {});
+  currentTrack = url;
+  clearCloud();
+  running = true;
+  currentMode = key;
+}
+
+const MAX_NODES = 520;
+const SPAWN_MS  = 60;
+const THRESH    = 0.035;
+const SPREAD_X  = 520;
+const SPREAD_Y  = 480;
+const SPREAD_Z  = 520;
+const JITTER    = 26;
+const LINK_K    = 3;
+const LINK_R    = 150;
+const LINK_R2   = LINK_R * LINK_R;
+
+const nodes = [];
+const edges = [];
+let seqCounter = 0;
+let lastSpawn = 0;
+let levelSmooth = 0, peak = 0;
+const startTime = performance.now();
+
+const HZ_MIN = 120, HZ_MAX = 9000;
+function hzToHue(hz) {
+  const t = Math.max(0, Math.min(1,
+    (Math.log(Math.max(hz, HZ_MIN)) - Math.log(HZ_MIN)) /
+    (Math.log(HZ_MAX) - Math.log(HZ_MIN))));
+  return t * 245;
+}
+
+function analyse(now) {
+  if (!analyser) return { domHz: 0 };
+  analyser.getByteFrequencyData(freqBytes);
+  const bins    = freqBytes;
+  const binSR   = sampleRate;
+  const binFFTN = fftSize;
+  const used = bins.length;
+
+  let level = 0, centroid = 0, magSum = 0, domBin = 0, domVal = 0, spread = 0;
+  for (let i = 0; i < used; i++) {
+    const m = bins[i];
+    level += m; centroid += i * m; magSum += m;
+    if (m > domVal) { domVal = m; domBin = i; }
+  }
+  level = level / (used * 255);
+  centroid = magSum > 0 ? centroid / magSum / used : 0;
+  if (magSum > 0) {
+    const cb = centroid * used;
+    let varSum = 0;
+    for (let i = 0; i < used; i++) varSum += bins[i] * (i - cb) * (i - cb);
+    spread = Math.min(1, Math.sqrt(varSum / magSum) / (used * 0.5));
+  }
+
+  levelSmooth += (level - levelSmooth) * 0.25;
+  peak = Math.max(peak * 0.99, levelSmooth);
+  const domHz = domBin * binSR / binFFTN;
+
+  if (running && level > THRESH && now - lastSpawn > SPAWN_MS) {
+    lastSpawn = now;
+    const energy = Math.max(0, Math.min(1, level * 6));
+    const node = {
+      seq: seqCounter++,
+      x: (centroid - 0.5) * SPREAD_X + (Math.random() - 0.5) * JITTER,
+      y: -(level - 0.08) * 2200 + (Math.random() - 0.5) * JITTER,
+      z: (spread - 0.4) * SPREAD_Z + (Math.random() - 0.5) * JITTER,
+      energy, p: null,
+      hue: hzToHue(domHz || (HZ_MIN + centroid * (HZ_MAX - HZ_MIN))),
+      glyph: RAMP[Math.min(RAMP.length - 1, Math.floor((0.25 + energy * 0.75) * RAMP.length))],
+    };
+    const near = [];
+    for (const m of nodes) {
+      const dx = m.x - node.x, dy = m.y - node.y, dz = m.z - node.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < LINK_R2) near.push({ m, d2 });
+    }
+    near.sort((p, q) => p.d2 - q.d2);
+    for (let k = 0; k < Math.min(LINK_K, near.length); k++) edges.push([node, near[k].m]);
+    nodes.push(node);
+    while (nodes.length > MAX_NODES) {
+      const removed = nodes.shift();
+      for (let e = edges.length - 1; e >= 0; e--)
+        if (edges[e][0] === removed || edges[e][1] === removed) edges.splice(e, 1);
+    }
+  }
+  return { domHz };
+}
+
+let D = 560;
+const FOV = 470;
+let yaw = 0.4;
+const PITCH = 0.32;
+let focusX = 0, focusY = 0, focusZ = 0;
+let CX = 0, CY = 0;
+
+function project(x, y, z, cosA, sinA, cosB, sinB) {
+  x -= focusX; y -= focusY; z -= focusZ;
+  const x1 = x * cosA + z * sinA;
+  const z1 = -x * sinA + z * cosA;
+  const y2 = y * cosB - z1 * sinB;
+  const z2 = y * sinB + z1 * cosB;
+  const zc = z2 + D;
+  if (zc < 1) return null;
+  const s = FOV / zc;
+  return { sx: CX + x1 * s, sy: CY + y2 * s, s, zc };
+}
+
+const ILLUS = [
+  { mode: 'sample1', label: 'environmental.01', dist: '358 meters away' },
+  { mode: 'mic',     label: 'environmental.02', dist: '0 meters away'   },
+  { mode: 'sample2', label: 'environmental.03', dist: '819 meters away' },
+];
+let activeIndex = 1;
+let offset = null, offsetTarget = null;
+let ILLUS_R = 240, SPACING = 540;
+let dragging = false, moved = false, startPX = 0, startOffset = 0;
+let settleAt = null;
+const FADE_DELAY = 0.5, FADE_DUR = 0.7, FADE_MIN = 0.16;
+
+function deviceX(i) { return W / 2 + (i * SPACING - offset); }
+
+function triggerSource(i) {
+  if (i === 0) playPreset('sample1_bruit.mp3', 'sample1');
+  else if (i === 1) startMic();
+  else if (i === 2) playPreset('sample2.mp3', 'sample2');
+}
+
+function setActiveIndex(i) {
+  i = Math.max(0, Math.min(ILLUS.length - 1, i));
+  if (i === activeIndex) return;
+  activeIndex = i;
+  running = false;
+  stopTrack();
+  clearCloud();
+  currentMode = 'standby';
+}
+
+canvas.addEventListener('pointerdown', e => {
+  dragging = true; moved = false; startPX = e.clientX; startOffset = offset;
+  canvas.classList.add('grabbing');
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const dx = e.clientX - startPX;
+  if (Math.abs(dx) > 5) moved = true;
+  offsetTarget = Math.max(0, Math.min((ILLUS.length - 1) * SPACING, startOffset - dx));
+});
+canvas.addEventListener('pointerup', e => {
+  dragging = false;
+  canvas.classList.remove('grabbing');
+  if (!moved) {
+    const cyHit = CY, x = e.clientX, y = e.clientY;
+    let hit = -1;
+    for (let i = 0; i < ILLUS.length; i++) {
+      if (Math.hypot(x - deviceX(i), y - cyHit) < ILLUS_R) { hit = i; break; }
+    }
+    if (hit === activeIndex) triggerSource(hit);
+    else if (hit >= 0) setActiveIndex(hit);
+  } else {
+    setActiveIndex(Math.round(offset / SPACING));
+  }
+});
+
+function drawDevice(cx, cy, R, alpha, active, fade = 1) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.setLineDash([]);
+  const rimFade = fade + (1 - fade) * 0.25;
+  const col = (m, ff = fade) => `rgba(255,255,255,${(m * alpha * ff).toFixed(3)})`;
+
+  ctx.lineWidth = active ? 1.4 : 0.9;
+  ctx.strokeStyle = col(0.5, rimFade);
+  ctx.setLineDash([6, 8]);
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 0.8;
+  ctx.strokeStyle = col(0.16);
+  ctx.beginPath(); ctx.arc(cx, cy, R * 0.9, 0, Math.PI * 2); ctx.stroke();
+
+  ctx.strokeStyle = col(0.34);
+  ctx.lineWidth = R * 0.035;
+  const i0 = R * 0.17, i1 = R * 0.52;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - i0); ctx.lineTo(cx, cy - i1);
+  ctx.moveTo(cx, cy + i0); ctx.lineTo(cx, cy + i1);
+  ctx.moveTo(cx - i0, cy); ctx.lineTo(cx - i1, cy);
+  ctx.moveTo(cx + i0, cy); ctx.lineTo(cx + i1, cy);
+  ctx.stroke();
+
+  ctx.fillStyle = col(0.4);
+  const hr = Math.max(1.8, R * 0.028), dd = R * 0.73;
+  for (const [ox, oy] of [[0, -dd], [0, dd], [-dd, 0], [dd, 0]]) {
+    ctx.beginPath(); ctx.arc(cx + ox, cy + oy, hr, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(cx, cy, hr * 0.9, 0, Math.PI * 2); ctx.fill();
+
+  if (active) {
+    ctx.shadowColor = 'rgba(255,255,255,0.2)';
+    ctx.shadowBlur = 16 * rimFade;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = col(0.3, rimFade);
+    ctx.setLineDash([6, 8]);
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+  }
+  ctx.restore();
+}
+
+function drawViz(cosA, sinA, cosB, sinB) {
+  if (!nodes.length) return;
+  ctx.save();
+
+  for (let i = 0; i < nodes.length; i++)
+    nodes[i].p = project(nodes[i].x, nodes[i].y, nodes[i].z, cosA, sinA, cosB, sinB);
+
+  ctx.lineWidth = 1;
+  for (let e = 0; e < edges.length; e++) {
+    const a = edges[e][0].p, b = edges[e][1].p;
+    if (!a || !b) continue;
+    if (a.s < 0.05 && b.s < 0.05) continue;
+    const al = Math.min(0.3, Math.min(a.s, b.s) * 0.4);
+    ctx.strokeStyle = `hsla(${edges[e][0].hue}, 80%, 62%, ${al.toFixed(3)})`;
+    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+  }
+
+  const order = [];
+  for (let i = 0; i < nodes.length; i++) if (nodes[i].p) order.push(i);
+  order.sort((i, j) => nodes[j].p.zc - nodes[i].p.zc);
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const i of order) {
+    const n = nodes[i], p = n.p;
+    if (p.s < 0.04) continue;
+    const fs = Math.max(5, Math.min(26, FONT * (0.7 + n.energy * 1.1) * p.s));
+    const alpha = Math.max(0.06, Math.min(1, p.s)) * (0.45 + 0.55 * n.energy);
+    ctx.font = fs.toFixed(1) + "px 'Courier New', monospace";
+    ctx.shadowColor = `hsla(${n.hue}, 95%, 60%, ${alpha.toFixed(3)})`;
+    ctx.shadowBlur = 5 + n.energy * 16 * p.s;
+    ctx.fillStyle = `hsla(${n.hue}, 92%, ${(56 + n.energy * 16).toFixed(0)}%, ${alpha.toFixed(3)})`;
+    ctx.fillText(n.glyph, p.sx, p.sy);
+  }
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function frame(now) {
+  W = window.innerWidth; H = window.innerHeight;
+  ILLUS_R = Math.min(W, H) * 0.3;
+  SPACING = ILLUS_R * 2.2;
+  CY = H / 2;
+  CX = W / 2;
+  if (offset === null) { offset = activeIndex * SPACING; offsetTarget = offset; }
+  if (!dragging) offsetTarget = activeIndex * SPACING;
+  offset += (offsetTarget - offset) * 0.18;
+
+  const { domHz } = analyse(now);
+
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  yaw += 0.0016;
+  const cosA = Math.cos(yaw), sinA = Math.sin(yaw);
+  const cosB = Math.cos(PITCH), sinB = Math.sin(PITCH);
+
+  if (nodes.length) {
+    let mx = 0, my = 0, mz = 0;
+    for (const n of nodes) { mx += n.x; my += n.y; mz += n.z; }
+    mx /= nodes.length; my /= nodes.length; mz /= nodes.length;
+    let dsum = 0;
+    for (const n of nodes) dsum += Math.hypot(n.x - mx, n.y - my, n.z - mz);
+    const meanDist = dsum / nodes.length;
+    focusX += (mx - focusX) * 0.04;
+    focusY += (my - focusY) * 0.04;
+    focusZ += (mz - focusZ) * 0.04;
+    const worldR = Math.max(140, meanDist * 2.2);
+    let dTarget = worldR * FOV / (ILLUS_R * 0.78);
+    dTarget = Math.max(220, Math.min(1500, dTarget));
+    D += (dTarget - D) * 0.05;
+  }
+
+  const snapped = Math.abs(offset - activeIndex * SPACING) < SPACING * 0.05;
+  if (snapped && !dragging) { if (settleAt === null) settleAt = now; }
+  else settleAt = null;
+  let activeFade = 1;
+  if (settleAt !== null) {
+    const t = (now - settleAt) / 1000;
+    if (t > FADE_DELAY)
+      activeFade = 1 - (1 - FADE_MIN) * Math.min(1, (t - FADE_DELAY) / FADE_DUR);
+  }
+
+  const idx = [0, 1, 2].sort((a, b) =>
+    Math.abs(deviceX(b) - W / 2) - Math.abs(deviceX(a) - W / 2));
+  for (const i of idx) {
+    const x = deviceX(i);
+    const dist = Math.abs(x - W / 2);
+    const alpha = Math.max(0.2, 1 - dist / SPACING);
+    const active = (i === activeIndex) && snapped;
+    drawDevice(x, CY, ILLUS_R, alpha, active, active ? activeFade : 1);
+    if (active) drawViz(cosA, sinA, cosB, sinB);
+  }
+
+  const labelY = CY + ILLUS_R + 24;
+  for (let i = 0; i < deviceLabels.length; i++) {
+    const x = deviceX(i);
+    const a = Math.max(0.2, 1 - Math.abs(x - W / 2) / SPACING);
+    const lbl = deviceLabels[i];
+    lbl.style.left = x + 'px';
+    lbl.style.top  = labelY + 'px';
+    lbl.style.opacity = a.toFixed(3);
+  }
+
+  const centerIdx = Math.max(0, Math.min(ILLUS.length - 1, Math.round(offset / SPACING)));
+  elEnv.textContent = ILLUS[centerIdx].label;
+  elDist.textContent = ILLUS[centerIdx].dist;
+  const el = (now - startTime) / 1000;
+  const pad = n => String(n).padStart(2, '0');
+  elTC.textContent = `${pad(Math.floor(el/3600))}:${pad(Math.floor(el/60)%60)}:${pad(Math.floor(el)%60)}:${pad(Math.floor(el*30)%30)}`;
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// --- Toggle Computer / Playback ---------------------------------------------
+function setCenterSource(src) {
+  const valid = ['computer', 'playback'];
+  const prev = centerSource;
+  centerSource = valid.includes(src) ? src : 'computer';
+  document.querySelectorAll('.toggle .opt').forEach(o =>
+    o.classList.toggle('active', o.dataset.src === centerSource));
+  lbl1Title.classList.toggle('on', centerSource === 'playback');
+  try { localStorage.setItem('centerSource', centerSource); } catch (_) {}
+
+  if (currentMode === 'mic' && activeIndex === 1) {
+    if (prev === 'playback' && centerSource !== 'playback') {
+      stopTrack();
+    }
+    if (centerSource === 'playback' && currentTrack !== PLAYBACK_SRC) {
+      ensureMic().then(ok => {
+        if (!ok) return;
+        if (!audioEl) audioEl = new Audio();
+        audioEl.src  = PLAYBACK_SRC;
+        audioEl.loop = true;
+        audioEl.play().catch(e => console.error('[playback]', e));
+        currentTrack = PLAYBACK_SRC;
+      });
+    }
+  }
+}
+document.querySelectorAll('.toggle .opt').forEach(o => {
+  o.addEventListener('pointerdown', e => e.stopPropagation());
+  o.addEventListener('pointerup',   e => e.stopPropagation());
+  o.addEventListener('click', e => {
+    e.stopPropagation();
+    setCenterSource(o.dataset.src);
+  });
+});
+setCenterSource(localStorage.getItem('centerSource') || 'computer');
+
+// Intro overlay: first tap unlocks AudioContext + getUserMedia (Safari/iOS gate).
+document.getElementById('enableBtn').addEventListener('click', async () => {
+  await ensureMic();
+  startMic();
+  document.getElementById('enable').classList.add('hide');
+});
+</script>
+</body>
+</html>

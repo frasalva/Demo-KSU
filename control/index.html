@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Demo control</title>
+<style>
+  :root {
+    --bg:        #0f1115;
+    --panel:     #181c24;
+    --panel-2:   #20252f;
+    --txt:       #e6e8ee;
+    --dim:       #8c93a3;
+    --line:      #2a2f3a;
+    --ok:        #36d399;
+    --warn:      #ffb454;
+    --err:       #ef476f;
+    --accent:    #6aa9ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--txt);
+               font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line);
+           display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { margin:0; font-size: 16px; font-weight:600; letter-spacing:.2px; }
+  header .sub { color: var(--dim); font-size: 12px; }
+  header .actions button { margin-left: 8px; }
+
+  main  { padding: 16px 20px 24px; display: flex; flex-direction: column; gap: 18px; }
+
+  /* ------- Status row: compact collapsible cards ------- */
+  .status-row { display: grid; gap: 10px;
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+          padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .card .top  { display:flex; align-items:center; gap:10px; }
+  .card .top  .name { font-weight: 600; font-size: 14px; }
+  .card .top  .role { color: var(--dim); font-size: 11px; margin-left: auto; }
+  .card .top  .caret { color: var(--dim); cursor: pointer; user-select: none;
+                       padding: 2px 6px; border-radius: 6px; }
+  .card .top  .caret:hover { color: var(--txt); background: var(--panel-2); }
+  .card .body { display:flex; flex-direction: column; gap: 6px; }
+  .card.collapsed .body { display: none; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim);
+         box-shadow: 0 0 0 2px rgba(255,255,255,.04); flex: 0 0 auto; }
+  .dot.ok   { background: var(--ok);   box-shadow: 0 0 8px rgba(54,211,153,.55); }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 8px rgba(255,180,84,.55); }
+  .dot.err  { background: var(--err);  box-shadow: 0 0 8px rgba(239,71,111,.55); }
+  .card .meta { color: var(--dim); font-size: 12px; word-break: break-all; }
+  .card .meta b { color: var(--txt); font-weight: 500; }
+  .card .row  { display:flex; justify-content:space-between; align-items:center; gap:10px;
+                font-size: 12px; }
+  .card .row .k { color: var(--dim); }
+  .card .row .v { font-variant-numeric: tabular-nums; }
+  .card .ctl  { display:flex; gap:6px; }
+  .card .last { color: var(--dim); font-size: 11px; min-height: 14px; }
+  .card .hostline { display:flex; gap:6px; }
+  .card .hostline input { flex: 1; }
+  .card .top .rttmini { color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums;
+                        margin-left: 4px; }
+
+  /* ------- Controls panels ------- */
+  .controls { display: grid; gap: 14px;
+              grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+           padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 220px; }
+  .panel h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .3px;
+              text-transform: uppercase; color: var(--dim); display:flex; align-items:center; gap:8px; }
+  .panel h2 .live { font-size: 11px; color: var(--ok); }
+  .panel h2 .live.off { color: var(--err); }
+  .panel .hint { color: var(--dim); font-size: 12px; }
+  .panel .sep  { height: 1px; background: var(--line); margin: 4px -4px; }
+  .panel .grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(86px, 1fr)); }
+  .panel .row  { display:flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .panel .row .k { color: var(--dim); font-size: 12px; }
+
+  button { background: var(--panel-2); color: var(--txt); border: 1px solid var(--line);
+           padding: 7px 12px; border-radius: 8px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--accent); }
+  button:active { transform: translateY(1px); }
+  button.primary { background: var(--accent); color: #0a1020; border-color: transparent; font-weight: 600; }
+  input[type=text] { background: var(--panel-2); color: var(--txt);
+                     border: 1px solid var(--line); padding: 6px 8px; border-radius: 8px;
+                     font: inherit; width: 100%; }
+
+  /* HAND directional buttons */
+  .hand-pad { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+  .hand-pad button { padding: 22px 12px; font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+  .hand-pad .b-left  { background: rgba(106,169,255,.10); border-color: var(--accent); }
+  .hand-pad .b-right { background: rgba(255,180,84,.10);  border-color: var(--warn);   }
+  .hand-stats { display:flex; gap:14px; color: var(--dim); font-size: 12px; }
+  .hand-stats b { color: var(--txt); font-variant-numeric: tabular-nums; }
+
+  footer { padding: 10px 20px; color: var(--dim); font-size: 11px; border-top: 1px solid var(--line); }
+  code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; }
+
+  @media (max-width: 720px) {
+    .status-row  { grid-template-columns: 1fr 1fr; }
+    .controls    { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Demo · control</h1>
+    <div class="sub">Rete: <code>CPS-2.4G</code> · WS MCU <code>:81</code> · bus <code>:8090</code></div>
+  </div>
+  <div class="actions">
+    <button id="collapse-all">collapse all</button>
+    <button id="reconnect-all">Reconnect all</button>
+  </div>
+</header>
+
+<main>
+  <section class="status-row" id="status-row"></section>
+  <section class="controls"   id="controls"></section>
+</main>
+
+<footer>
+  Override host: clicca <i>edit host</i> dentro una scheda e incolla l'IP (es. <code>192.168.1.42</code>)
+  se <code>*.local</code> non si risolve.
+</footer>
+
+<script>
+"use strict";
+
+// ============================================================================
+// NetBus: BroadcastChannel-compatible shim over a WebSocket relay.
+// URL discovery: ?bus=host:port → window.BUS_URL → ws://<page hostname>:8090/
+// ============================================================================
+class NetBus extends EventTarget {
+  constructor(url) {
+    super();
+    this.url = url || NetBus._defaultUrl();
+    this._queue = [];
+    this._connect();
+  }
+  static _defaultUrl() {
+    const q = new URLSearchParams(location.search).get("bus");
+    if (q)              return /^wss?:/.test(q) ? q : `ws://${q}/`;
+    if (window.BUS_URL) return window.BUS_URL;
+    return `ws://${location.hostname || "localhost"}:8090/`;
+  }
+  _connect() {
+    try { this.ws = new WebSocket(this.url); }
+    catch { return setTimeout(() => this._connect(), 2000); }
+    this.ws.onopen = () => {
+      console.log("[bus] open", this.url);
+      const q = this._queue; this._queue = [];
+      for (const s of q) try { this.ws.send(s); } catch {}
+    };
+    this.ws.onmessage = (ev) => {
+      let data; try { data = JSON.parse(ev.data); } catch { data = ev.data; }
+      this.dispatchEvent(new MessageEvent("message", { data }));
+    };
+    this.ws.onclose = () => setTimeout(() => this._connect(), 2000);
+    this.ws.onerror = () => {};
+  }
+  postMessage(obj) {
+    const s = typeof obj === "string" ? obj : JSON.stringify(obj);
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try { this.ws.send(s); } catch {}
+    } else {
+      this._queue.push(s);
+      if (this._queue.length > 200) this._queue.shift();
+    }
+  }
+}
+const bus = new NetBus();
+
+// ============================================================================
+// Devices: only the two Arduinos we drive from this page.
+// ============================================================================
+const DEVICES = [
+  { id: "hand",      role: "TENS dual-channel",  host: "hand.local",      port: 81 },
+  { id: "pump-neck", role: "pompe + valvole",    host: "pump-neck.local", port: 81 },
+];
+
+const PING_EVERY_MS    = 3000;
+const PING_TIMEOUT_MS  = 2500;
+const RECONNECT_MS     = 2000;
+const LS_PREFIX        = "democtrl.host.";
+const LS_COLLAPSED     = "democtrl.collapsed";
+
+const state = new Map();
+
+function loadHost(id, fallback) {
+  return localStorage.getItem(LS_PREFIX + id) || fallback;
+}
+function saveHost(id, host) {
+  if (host) localStorage.setItem(LS_PREFIX + id, host);
+  else      localStorage.removeItem(LS_PREFIX + id);
+}
+
+// ============================================================================
+// Status row (collapsible cards)
+// ============================================================================
+const elStatusRow = document.getElementById("status-row");
+const collapsed = new Set(JSON.parse(localStorage.getItem(LS_COLLAPSED) || "[]"));
+function persistCollapsed() {
+  localStorage.setItem(LS_COLLAPSED, JSON.stringify([...collapsed]));
+}
+
+function buildCard(dev) {
+  const card = document.createElement("section");
+  card.className = "card" + (collapsed.has(dev.id) ? " collapsed" : "");
+  card.dataset.id = dev.id;
+  card.innerHTML = `
+    <div class="top">
+      <span class="dot"></span>
+      <span class="name">${dev.id}</span>
+      <span class="rttmini"></span>
+      <span class="role">${dev.role}</span>
+      <span class="caret" title="collapse / expand">${collapsed.has(dev.id) ? "▸" : "▾"}</span>
+    </div>
+    <div class="body">
+      <div class="meta">URL: <b class="url"></b></div>
+      <div class="row"><span class="k">status</span><span class="v status">offline</span></div>
+      <div class="row"><span class="k">RTT</span><span class="v rtt">— ms</span></div>
+      <div class="last"></div>
+      <div class="hostline" hidden>
+        <input class="host-in" type="text" placeholder="hand.local oppure 192.168.x.y">
+        <button class="host-save">Save</button>
+        <button class="host-reset" title="Torna al default">↺</button>
+      </div>
+      <div class="ctl">
+        <button class="edit">edit host</button>
+        <button class="reco">reconnect</button>
+      </div>
+    </div>
+  `;
+  elStatusRow.appendChild(card);
+
+  const refs = {
+    card,
+    dot:    card.querySelector(".dot"),
+    rttmini:card.querySelector(".rttmini"),
+    url:    card.querySelector(".url"),
+    status: card.querySelector(".status"),
+    rtt:    card.querySelector(".rtt"),
+    last:   card.querySelector(".last"),
+    hostln: card.querySelector(".hostline"),
+    hostIn: card.querySelector(".host-in"),
+    caret:  card.querySelector(".caret"),
+  };
+  refs.caret.onclick = () => {
+    const isCollapsed = card.classList.toggle("collapsed");
+    refs.caret.textContent = isCollapsed ? "▸" : "▾";
+    if (isCollapsed) collapsed.add(dev.id); else collapsed.delete(dev.id);
+    persistCollapsed();
+  };
+  card.querySelector(".edit").onclick = () => {
+    const open = !refs.hostln.hidden;
+    refs.hostln.hidden = open;
+    if (!open) { refs.hostIn.value = loadHost(dev.id, dev.host); refs.hostIn.focus(); }
+  };
+  card.querySelector(".host-save").onclick = () => {
+    saveHost(dev.id, refs.hostIn.value.trim());
+    refs.hostln.hidden = true;
+    connect(dev.id);
+  };
+  card.querySelector(".host-reset").onclick = () => {
+    saveHost(dev.id, "");
+    refs.hostln.hidden = true;
+    connect(dev.id);
+  };
+  card.querySelector(".reco").onclick = () => connect(dev.id);
+  return refs;
+}
+
+const refs = new Map();
+for (const d of DEVICES) refs.set(d.id, buildCard(d));
+
+function setStatus(id, status, extra) {
+  const r = refs.get(id);
+  if (!r) return;
+  r.status.textContent = status;
+  r.dot.classList.remove("ok","warn","err");
+  if      (status === "online")      r.dot.classList.add("ok");
+  else if (status === "connecting")  r.dot.classList.add("warn");
+  else                                r.dot.classList.add("err");
+  if (extra) r.last.textContent = extra;
+}
+function setRtt(id, ms) {
+  const r = refs.get(id); if (!r) return;
+  r.rtt.textContent     = ms == null ? "— ms" : `${ms} ms`;
+  r.rttmini.textContent = ms == null ? ""     : `${ms}ms`;
+}
+function setUrl(id, url) {
+  const r = refs.get(id); if (!r) return;
+  r.url.textContent = url;
+}
+
+// ============================================================================
+// MCU connection: heartbeat ping/pong, auto-reconnect.
+// ============================================================================
+function connect(id) {
+  const dev = DEVICES.find(d => d.id === id);
+  if (!dev) return;
+  const host = loadHost(id, dev.host);
+  const url  = `ws://${host}:${dev.port}/`;
+  setUrl(id, url);
+
+  const prev = state.get(id);
+  if (prev) {
+    clearTimeout(prev.reconnectTimer);
+    clearInterval(prev.pingTimer);
+    clearTimeout(prev.pingTimeout);
+    if (prev.ws) { try { prev.ws.onopen = prev.ws.onclose = prev.ws.onerror = prev.ws.onmessage = null; } catch{} ; try { prev.ws.close(); } catch{} }
+  }
+
+  const s = { ws: null, pingAt: 0,
+              pingTimer: null, pingTimeout: null, reconnectTimer: null };
+  state.set(id, s);
+  setStatus(id, "connecting", `→ ${url}`);
+  setRtt(id, null);
+
+  let ws;
+  try { ws = new WebSocket(url); }
+  catch (e) {
+    setStatus(id, "offline", `bad URL: ${e.message}`);
+    s.reconnectTimer = setTimeout(() => connect(id), RECONNECT_MS);
+    return;
+  }
+  s.ws = ws;
+  ws.binaryType = "arraybuffer";
+
+  ws.onopen = () => {
+    setStatus(id, "online", `connesso · ${new Date().toLocaleTimeString()}`);
+    s.pingTimer = setInterval(() => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      s.pingAt = performance.now();
+      try { ws.send("ping"); } catch {}
+      clearTimeout(s.pingTimeout);
+      s.pingTimeout = setTimeout(() => {
+        setStatus(id, "offline", "ping timeout");
+        try { ws.close(); } catch {}
+      }, PING_TIMEOUT_MS);
+    }, PING_EVERY_MS);
+  };
+
+  ws.onmessage = (ev) => {
+    if (typeof ev.data !== "string") return;
+    if (ev.data === "pong") {
+      const dt = Math.round(performance.now() - s.pingAt);
+      setRtt(id, dt);
+      clearTimeout(s.pingTimeout); s.pingTimeout = null;
+      return;
+    }
+    if (ev.data.startsWith("hello:")) {
+      setStatus(id, "online", `hello da “${ev.data.slice(6)}”`);
+      return;
+    }
+    setStatus(id, "online", `← ${ev.data}`);
+  };
+  ws.onerror = () => setStatus(id, "offline", "errore WS");
+  ws.onclose = (ev) => {
+    clearInterval(s.pingTimer);
+    clearTimeout(s.pingTimeout);
+    setStatus(id, "offline", `chiuso (code ${ev.code})`);
+    setRtt(id, null);
+    s.reconnectTimer = setTimeout(() => connect(id), RECONNECT_MS);
+  };
+}
+
+function sendTo(id, msg) {
+  const s = state.get(id);
+  if (!s || !s.ws || s.ws.readyState !== WebSocket.OPEN) return false;
+  try { s.ws.send(msg); return true; } catch { return false; }
+}
+
+document.getElementById("reconnect-all").onclick = () => {
+  for (const d of DEVICES) connect(d.id);
+};
+document.getElementById("collapse-all").onclick = () => {
+  const allCollapsed = DEVICES.every(d => collapsed.has(d.id));
+  for (const d of DEVICES) {
+    if (allCollapsed) collapsed.delete(d.id);
+    else collapsed.add(d.id);
+    const r = refs.get(d.id);
+    r.card.classList.toggle("collapsed", !allCollapsed);
+    r.caret.textContent = !allCollapsed ? "▸" : "▾";
+  }
+  persistCollapsed();
+};
+
+// ============================================================================
+// HAND panel: send "1" / "2" to MCU + broadcast hand.signal to 00_HAND page.
+// ============================================================================
+const elControls = document.getElementById("controls");
+
+function buildHandPanel() {
+  const p = document.createElement("div");
+  p.className = "panel";
+  p.innerHTML = `
+    <h2>hand <span class="live off">● offline</span></h2>
+    <div class="hint">arrow keys o <code>1</code>/<code>2</code> · oppure i bottoni qui sotto</div>
+    <div class="hand-pad">
+      <button class="b-left"  data-dir="-1">← LEFT (1)</button>
+      <button class="b-right" data-dir="+1">RIGHT (2) →</button>
+    </div>
+    <div class="hand-stats">
+      <span>sent: <b class="cnt">0</b></span>
+      <span>last: <b class="lst">—</b></span>
+      <span>cooldown: <b class="cd">ready</b></span>
+    </div>
+  `;
+  elControls.appendChild(p);
+  const live = p.querySelector(".live");
+  const cnt  = p.querySelector(".cnt");
+  const lst  = p.querySelector(".lst");
+  const cd   = p.querySelector(".cd");
+
+  let count = 0;
+  let cooldownUntil = 0;
+  function fire(dir) {
+    const now = performance.now();
+    if (now < cooldownUntil) return;
+    cooldownUntil = now + 1000;
+    const ch = dir < 0 ? "1" : "2";
+    if (!sendTo("hand", ch)) {
+      lst.textContent = `no WS (${ch})`;
+      return;
+    }
+    count++;
+    cnt.textContent = count;
+    lst.textContent = `${dir < 0 ? "LEFT" : "RIGHT"} (${ch})`;
+    cd.textContent = "1.0s";
+    bus.postMessage({ type: "hand.signal", dir, from: "control" });
+    setTimeout(() => { cd.textContent = "ready"; }, 1000);
+  }
+
+  p.querySelectorAll("[data-dir]").forEach(b => {
+    b.onclick = () => fire(parseInt(b.dataset.dir, 10));
+  });
+  window.addEventListener("keydown", e => {
+    const tgt = e.target;
+    if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA")) return;
+    if (e.key === "ArrowLeft"  || e.key === "1") { fire(-1); e.preventDefault(); }
+    if (e.key === "ArrowRight" || e.key === "2") { fire(+1); e.preventDefault(); }
+  });
+
+  const updateLive = () => {
+    const s = state.get("hand");
+    const open = s && s.ws && s.ws.readyState === WebSocket.OPEN;
+    live.classList.toggle("off", !open);
+    live.textContent = open ? "● online" : "● offline";
+  };
+  setInterval(updateLive, 800);
+}
+
+// ============================================================================
+// PUMP-NECK panel: manual command buttons (no auto-trigger).
+// ============================================================================
+function buildPumpPanel() {
+  const p = document.createElement("div");
+  p.className = "panel";
+  p.innerHTML = `
+    <h2>pump-neck <span class="live off">● offline</span></h2>
+    <div class="grid">
+      <button data-cmd="i">GONFIA (i)</button>
+      <button data-cmd="h">HOLD   (h)</button>
+      <button data-cmd="d">SGONFIA(d)</button>
+    </div>
+    <div class="grid">
+      <button data-cmd="a">solo SX (a)</button>
+      <button data-cmd="s">solo DX (s)</button>
+      <button data-cmd="3" class="primary">NOISE (3)</button>
+    </div>
+    <div class="grid">
+      <button data-cmd="1">pattern 1</button>
+      <button data-cmd="2">pattern 2</button>
+    </div>
+    <div class="row">
+      <span class="k">speed</span>
+      <button data-cmd="-">−</button>
+      <button data-cmd="+">+</button>
+      <span class="hint">il valore aggiornato lo vedi sul monitor seriale</span>
+    </div>
+    <div class="hint last-cmd"></div>
+  `;
+  elControls.appendChild(p);
+  const live = p.querySelector(".live");
+  const lastCmd = p.querySelector(".last-cmd");
+
+  p.querySelectorAll("[data-cmd]").forEach(b => {
+    b.onclick = () => {
+      const ok = sendTo("pump-neck", b.dataset.cmd);
+      lastCmd.textContent = ok
+        ? `inviato '${b.dataset.cmd}' (${new Date().toLocaleTimeString()})`
+        : `no WS — non ho mandato '${b.dataset.cmd}'`;
+    };
+  });
+
+  const updateLive = () => {
+    const s = state.get("pump-neck");
+    const open = s && s.ws && s.ws.readyState === WebSocket.OPEN;
+    live.classList.toggle("off", !open);
+    live.textContent = open ? "● online" : "● offline";
+  };
+  setInterval(updateLive, 800);
+}
+
+buildHandPanel();
+buildPumpPanel();
+
+for (const d of DEVICES) connect(d.id);
+</script>
+</body>
+</html>
