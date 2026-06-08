@@ -16,7 +16,10 @@ cd "$(dirname "$0")/.."          # spostati in 00_demo/
 HTTP_PORT=8000
 BUS_PORT=8090
 
-IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "?.?.?.?")
+# Cross-platform IP discovery: Linux/WSL first (hostname -I), then macOS.
+IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+[ -z "$IP" ] && IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
+[ -z "$IP" ] && IP="?.?.?.?"
 
 echo "============================================================"
 echo "  Demo · server"
