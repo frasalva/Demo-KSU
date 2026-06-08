@@ -48,7 +48,8 @@
                   font-weight: 700; transition: opacity .2s; }
 
   /* shared pill style */
-  .pill { pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 10px;
+  .pill { pointer-events: auto; cursor: pointer; display: inline-flex;
+          align-items: center; justify-content: center; gap: 10px;
           border: 1px solid rgba(255,255,255,.55); border-radius: 100px; padding: 9px 22px;
           color: var(--fg); background: rgba(0,0,0,.4);
           font: 700 12px/1 'Space Mono', monospace; letter-spacing: 3px; text-transform: uppercase;
@@ -485,7 +486,19 @@ canvas.addEventListener('pointermove', e => {
 canvas.addEventListener('pointerup', e => {
   dragging = false;
   canvas.classList.remove('grabbing');
-  if (moved) setActiveIndex(Math.round(offset / SPACING));
+  if (moved) {
+    setActiveIndex(Math.round(offset / SPACING));
+    return;
+  }
+  // Tap (non drag): se centri il device attivo lo fa partire (come START);
+  // se tocchi un device laterale ci scorri sopra (come la freccia).
+  const x = e.clientX, y = e.clientY;
+  let hit = -1;
+  for (let i = 0; i < ILLUS.length; i++) {
+    if (Math.hypot(x - deviceX(i), y - CY) < ILLUS_R) { hit = i; break; }
+  }
+  if (hit === activeIndex)      triggerSource(hit);
+  else if (hit >= 0)            setActiveIndex(hit);
 });
 
 function drawDevice(cx, cy, R, alpha, active, fade = 1) {
