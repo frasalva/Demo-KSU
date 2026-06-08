@@ -10,7 +10,7 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
-  body { font-family: 'Space Mono', 'Courier New', monospace; }
+  body { font-family: 'Space Mono', 'Courier New', monospace; color: var(--fg); }
 
   #scene { position: fixed; inset: 0; display: block; cursor: grab; }
   #scene.grabbing { cursor: grabbing; }
@@ -47,24 +47,50 @@
                   text-align: center; white-space: nowrap;
                   font-weight: 700; transition: opacity .2s; }
 
-  .toggle { display: inline-flex; border: 1px solid var(--dim);
-            border-radius: 4px; overflow: hidden; pointer-events: auto;
-            background: rgba(0,0,0,.5); }
-  .toggle .opt { background: transparent; border: none; color: var(--dim);
-                 font-family: inherit; font-size: 11px; letter-spacing: 2px;
-                 text-transform: uppercase; padding: 7px 13px;
-                 cursor: pointer; transition: color .15s, background .15s;
-                 font-weight: 700; }
-  .toggle .opt:hover { color: var(--fg); }
-  .toggle .opt.active { color: var(--fg);
-                        background: rgba(255, 33, 24, 0.18); }
-  .toggle .opt + .opt { border-left: 1px solid var(--dim); }
+  /* shared pill style */
+  .pill { pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 10px;
+          border: 1px solid rgba(255,255,255,.55); border-radius: 100px; padding: 9px 22px;
+          color: var(--fg); background: rgba(0,0,0,.4);
+          font: 700 12px/1 'Space Mono', monospace; letter-spacing: 3px; text-transform: uppercase;
+          transition: opacity .15s, border-color .15s, color .15s, background .15s; }
+  .pill:hover { background: rgba(255,255,255,.07); }
+  .pill.on { background: rgba(255,255,255,.10); border-color: var(--fg); color: var(--fg); }
+  .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); }
+  .pill.on .dot { background: var(--fg); box-shadow: 0 0 8px var(--fg); }
 
-  .playback-title { margin-top: 10px; color: var(--red); font-size: 11px;
-                    letter-spacing: 3px; font-weight: 700;
-                    text-transform: uppercase; opacity: 0;
-                    transition: opacity .25s; }
-  .playback-title.on { opacity: 1; }
+  /* bottom nav bar: ← START → */
+  .nav { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%);
+         display: flex; gap: 14px; align-items: center; z-index: 8; pointer-events: auto; }
+  .nav .arrow { width: 56px; height: 56px; padding: 0; border-radius: 50%;
+                font-size: 24px; letter-spacing: 0; display: flex;
+                align-items: center; justify-content: center; }
+  .nav .start { min-width: 140px; padding: 18px 32px; font-size: 14px; }
+  .nav .arrow:disabled { opacity: .25; cursor: not-allowed; }
+
+  /* top right: settings */
+  .top-bar { position: fixed; top: 32px; left: 50%; transform: translateX(-50%);
+             display: flex; gap: 10px; z-index: 8; }
+
+  /* settings overlay */
+  .settings { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+              background: rgba(0,0,0,.78); z-index: 9; pointer-events: auto; }
+  .settings.show { display: flex; }
+  .panel { width: min(640px, 86vw); border: 1px solid rgba(255,255,255,.35); border-radius: 4px;
+           padding: 38px 44px; background: rgba(0,0,0,.85);
+           display: flex; flex-direction: column; gap: 28px; }
+  .panel h2 { font-size: 11px; letter-spacing: 4px; color: var(--dim); font-weight: 400;
+              text-transform: uppercase; margin-bottom: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+  .sens { display: flex; flex-direction: column; gap: 10px; }
+  .sens-track { display: flex; align-items: center; gap: 14px; }
+  .sens input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; height: 2px;
+                            background: rgba(255,255,255,.3); outline: none; }
+  .sens input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px;
+                            border-radius: 50%; background: var(--fg); cursor: pointer; }
+  .sens input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%;
+                            background: var(--fg); cursor: pointer; }
+  .sens-val { font-size: 12px; letter-spacing: 2px; color: var(--dim); min-width: 60px; text-align: right; }
 
   /* intro overlay */
   .enable { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -76,11 +102,6 @@
                 display: flex; flex-direction: column; gap: 22px; align-items: center; }
   .enable-box h2 { font-size: 11px; letter-spacing: 4px; color: var(--dim);
                    font-weight: 400; text-transform: uppercase; }
-  .enable .pill { cursor: pointer; display: inline-flex; align-items: center; gap: 10px;
-                  border: 1px solid rgba(255,255,255,.55); border-radius: 100px; padding: 9px 22px;
-                  color: var(--fg); background: transparent;
-                  font: 700 12px/1 'Space Mono', monospace; letter-spacing: 3px; text-transform: uppercase; }
-  .enable .pill:hover { background: rgba(255,255,255,.07); }
 
   .fx { position: fixed; inset: 0; pointer-events: none; }
   .fx.scan { background: repeating-linear-gradient(to bottom,
@@ -115,26 +136,57 @@
     </div>
 
     <div class="device-label" id="lbl0">BRUIT_CALL</div>
-    <div class="device-label" id="lbl1">
-      <div class="toggle">
-        <button class="opt" data-src="computer">Computer</button>
-        <button class="opt" data-src="playback">Playback</button>
-      </div>
-      <div class="playback-title" id="lbl1Title"></div>
-    </div>
+    <div class="device-label" id="lbl1">ENVIRONMENTAL.02</div>
     <div class="device-label" id="lbl2">MOURNING_DOVE</div>
+
     <div class="corner br-blk">
       <div class="tag">// proximity</div>
       <div class="bval" id="distance">0 meters away</div>
     </div>
   </div>
 
-  <!-- Safari/iPad require a user gesture before getUserMedia() and AudioContext.
-       The overlay swallows the first tap and unlocks both. -->
+  <!-- top: settings -->
+  <div class="top-bar">
+    <button class="pill" id="settingsBtn"><span class="dot"></span> settings</button>
+  </div>
+
+  <!-- bottom: ← START → -->
+  <div class="nav">
+    <button class="pill arrow" id="prevBtn">‹</button>
+    <button class="pill start"  id="startBtn">START</button>
+    <button class="pill arrow" id="nextBtn">›</button>
+  </div>
+
+  <!-- intro overlay (Safari/iOS gesture gate) -->
   <div class="enable" id="enable">
     <div class="enable-box">
       <h2>// tap to begin</h2>
       <button class="pill" id="enableBtn">enter</button>
+    </div>
+  </div>
+
+  <!-- settings overlay -->
+  <div class="settings" id="settings">
+    <div class="panel">
+      <div class="sens">
+        <h2>// sensitivity <span id="sensLabel" style="color:var(--dim)">low &middot; high</span></h2>
+        <div class="sens-track">
+          <input type="range" id="sens" min="0" max="100" value="60">
+          <span class="sens-val" id="sensVal">60%</span>
+        </div>
+      </div>
+
+      <div>
+        <h2>// center source (environmental.02)</h2>
+        <div class="row">
+          <button class="pill" data-src="computer">Computer mic</button>
+          <button class="pill" data-src="playback">Playback (mourning dove)</button>
+        </div>
+      </div>
+
+      <div class="row" style="justify-content:flex-end; margin-top: 6px;">
+        <button class="pill" id="closeBtn">close</button>
+      </div>
     </div>
   </div>
 
@@ -153,16 +205,109 @@ const deviceLabels = [
 const RAMP = " .:-=+*oO#%";
 const FONT = 12;
 
-// Sorgente del device centrale:
-//   'computer' = AnalyserNode del microfono dell'iPad/laptop
-//   'playback' = riproduce PLAYBACK_SRC dalle casse, il mic lo ricapta
-let centerSource = 'computer';
-
+// === CONFIG: sample files + center "Playback" source ========================
+const SAMPLE_LEFT    = 'sample1_bruit.mp3';
+const SAMPLE_RIGHT   = 'sample2.mp3';
 const PLAYBACK_SRC   = 'sample3_mourningDove.mp3';
-const PLAYBACK_TITLE = 'MOURNING_DOVE';
 
-const lbl1Title = document.getElementById('lbl1Title');
-lbl1Title.textContent = PLAYBACK_TITLE;
+// Which source the center device uses: 'computer' (iPad mic) or 'playback'.
+let centerSource = localStorage.getItem('centerSource') || 'computer';
+
+// User-controlled sensitivity (0..1). Higher = more reactive viz.
+let sensitivity = (parseInt(localStorage.getItem('sens') || '60', 10)) / 100;
+
+// === AUDIO PIPELINE ==========================================================
+// One AudioContext + one shared AnalyserNode. The "current source" feeds it:
+//   mic  : MediaStreamSource → analyser
+//   side : AudioBufferSource → analyser → destination (audible)
+//   play : AudioBufferSource → analyser → destination (audible)
+// We never re-capture audio via the mic anymore — every analyzed signal goes
+// directly into the analyser, so loudness/clarity is identical to the source.
+let actx = null, analyser = null, freqBytes = null;
+let sampleRate = 44100, fftSize = 1024;
+let micStream = null, micSrcNode = null, micReady = false;
+let sampleSrcNode = null;
+const sampleBufCache = new Map();   // url → AudioBuffer
+
+let currentTrack = null, currentMode = 'standby', running = false;
+
+async function ensureCtx() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') await actx.resume();
+  sampleRate = actx.sampleRate;
+  if (!analyser) {
+    analyser = actx.createAnalyser();
+    analyser.fftSize = fftSize;
+    analyser.smoothingTimeConstant = 0.72;
+    freqBytes = new Uint8Array(analyser.frequencyBinCount);
+  }
+}
+async function ensureMic() {
+  if (micReady) return true;
+  try {
+    await ensureCtx();
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+    micSrcNode = actx.createMediaStreamSource(micStream);
+    micReady = true;
+    return true;
+  } catch (e) {
+    console.warn('[mic] denied/blocked', e);
+    return false;
+  }
+}
+function disconnectCurrent() {
+  try { if (micSrcNode) micSrcNode.disconnect(); } catch {}
+  try {
+    if (sampleSrcNode) {
+      try { sampleSrcNode.stop(); } catch {}
+      sampleSrcNode.disconnect();
+      sampleSrcNode = null;
+    }
+  } catch {}
+  try { analyser && analyser.disconnect(); } catch {}
+}
+async function loadSample(url) {
+  if (sampleBufCache.has(url)) return sampleBufCache.get(url);
+  const r  = await fetch(url);
+  const ab = await r.arrayBuffer();
+  const buf = await actx.decodeAudioData(ab);
+  sampleBufCache.set(url, buf);
+  return buf;
+}
+async function startMic() {
+  await ensureCtx();
+  if (!(await ensureMic())) return;
+  disconnectCurrent();
+  micSrcNode.connect(analyser);
+  // Mic NOT connected to destination on purpose — we don't want feedback.
+  clearCloud();
+  running = true;
+  currentMode = 'mic';
+  currentTrack = null;
+}
+async function playSampleUrl(url, key) {
+  await ensureCtx();
+  disconnectCurrent();
+  const buf = await loadSample(url);
+  sampleSrcNode = actx.createBufferSource();
+  sampleSrcNode.buffer = buf;
+  sampleSrcNode.loop = true;
+  sampleSrcNode.connect(analyser);
+  analyser.connect(actx.destination);    // audible playback
+  sampleSrcNode.start();
+  clearCloud();
+  running = true;
+  currentMode = key;
+  currentTrack = url;
+}
+
+function clearCloud() {
+  nodes.length = 0; edges.length = 0;
+  seqCounter = 0; lastSpawn = 0; levelSmooth = 0; peak = 0;
+  focusX = focusY = focusZ = 0;
+}
 
 let W = window.innerWidth, H = window.innerHeight;
 function resize() {
@@ -177,71 +322,10 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-let actx = null, analyser = null, freqBytes = null, sampleRate = 44100, fftSize = 1024;
-let micReady = false;
-let audioEl = null, currentTrack = null, currentMode = 'standby', running = false;
-
-async function ensureMic() {
-  if (micReady) return true;
-  try {
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === 'suspended') await actx.resume();
-    sampleRate = actx.sampleRate;
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-    });
-    const src = actx.createMediaStreamSource(stream);
-    analyser = actx.createAnalyser();
-    analyser.fftSize = fftSize;
-    analyser.smoothingTimeConstant = 0.7;
-    src.connect(analyser);
-    freqBytes = new Uint8Array(analyser.frequencyBinCount);
-    micReady = true;
-    return true;
-  } catch (e) {
-    console.warn('[mic] denied/blocked', e);
-    return false;
-  }
-}
-
-function clearCloud() {
-  nodes.length = 0; edges.length = 0;
-  seqCounter = 0; lastSpawn = 0; levelSmooth = 0; peak = 0;
-  focusX = focusY = focusZ = 0;
-}
-function stopTrack() {
-  if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; }
-  currentTrack = null;
-}
-async function startMic() {
-  if (!(await ensureMic())) return;
-  stopTrack();
-  clearCloud();
-  if (centerSource === 'playback') {
-    if (!audioEl) audioEl = new Audio();
-    audioEl.src  = PLAYBACK_SRC;
-    audioEl.loop = true;
-    audioEl.play().catch(e => console.error('[playback]', e));
-    currentTrack = PLAYBACK_SRC;
-  }
-  running = true;
-  currentMode = 'mic';
-}
-async function playPreset(url, key) {
-  if (!(await ensureMic())) return;
-  if (!audioEl) audioEl = new Audio();
-  stopTrack();
-  audioEl.src = url;
-  audioEl.play().catch(() => {});
-  currentTrack = url;
-  clearCloud();
-  running = true;
-  currentMode = key;
-}
-
+// === CLOUD VIZ ==============================================================
 const MAX_NODES = 520;
-const SPAWN_MS  = 60;
-const THRESH    = 0.035;
+const SPAWN_MS  = 50;
+const THRESH    = 0.015;   // lowered (was 0.035) — combined with sensitivity
 const SPREAD_X  = 520;
 const SPREAD_Y  = 480;
 const SPREAD_Z  = 520;
@@ -268,10 +352,9 @@ function hzToHue(hz) {
 function analyse(now) {
   if (!analyser) return { domHz: 0 };
   analyser.getByteFrequencyData(freqBytes);
-  const bins    = freqBytes;
-  const binSR   = sampleRate;
-  const binFFTN = fftSize;
-  const used = bins.length;
+  const bins  = freqBytes;
+  const used  = bins.length;
+  const binSR = sampleRate;
 
   let level = 0, centroid = 0, magSum = 0, domBin = 0, domVal = 0, spread = 0;
   for (let i = 0; i < used; i++) {
@@ -288,9 +371,13 @@ function analyse(now) {
     spread = Math.min(1, Math.sqrt(varSum / magSum) / (used * 0.5));
   }
 
-  levelSmooth += (level - levelSmooth) * 0.25;
+  // Apply user sensitivity (0..1 → 0.5..4.5×) and clamp.
+  const gain = 0.5 + sensitivity * 4.0;
+  level = Math.min(1, level * gain);
+
+  levelSmooth += (level - levelSmooth) * 0.30;
   peak = Math.max(peak * 0.99, levelSmooth);
-  const domHz = domBin * binSR / binFFTN;
+  const domHz = domBin * binSR / fftSize;
 
   if (running && level > THRESH && now - lastSpawn > SPAWN_MS) {
     lastSpawn = now;
@@ -355,22 +442,35 @@ const FADE_DELAY = 0.5, FADE_DUR = 0.7, FADE_MIN = 0.16;
 
 function deviceX(i) { return W / 2 + (i * SPACING - offset); }
 
-function triggerSource(i) {
-  if (i === 0) playPreset('sample1_bruit.mp3', 'sample1');
-  else if (i === 1) startMic();
-  else if (i === 2) playPreset('sample2.mp3', 'sample2');
+async function triggerSource(i) {
+  if (i === 0)      await playSampleUrl(SAMPLE_LEFT,  'sample1');
+  else if (i === 1) {
+    if (centerSource === 'playback') await playSampleUrl(PLAYBACK_SRC, 'mic');
+    else                              await startMic();
+  }
+  else if (i === 2) await playSampleUrl(SAMPLE_RIGHT, 'sample2');
 }
 
 function setActiveIndex(i) {
   i = Math.max(0, Math.min(ILLUS.length - 1, i));
   if (i === activeIndex) return;
   activeIndex = i;
+  // Stop whatever is playing — wait for START button to engage the new source.
+  disconnectCurrent();
   running = false;
-  stopTrack();
-  clearCloud();
   currentMode = 'standby';
+  currentTrack = null;
+  clearCloud();
+  updateNavButtons();
 }
 
+function updateNavButtons() {
+  document.getElementById('prevBtn').disabled = activeIndex <= 0;
+  document.getElementById('nextBtn').disabled = activeIndex >= ILLUS.length - 1;
+}
+
+// Swipe del carosello (drag laterale). NESSUN click sul canvas: per attivare
+// la sorgente si usa il bottone START in basso.
 canvas.addEventListener('pointerdown', e => {
   dragging = true; moved = false; startPX = e.clientX; startOffset = offset;
   canvas.classList.add('grabbing');
@@ -385,17 +485,7 @@ canvas.addEventListener('pointermove', e => {
 canvas.addEventListener('pointerup', e => {
   dragging = false;
   canvas.classList.remove('grabbing');
-  if (!moved) {
-    const cyHit = CY, x = e.clientX, y = e.clientY;
-    let hit = -1;
-    for (let i = 0; i < ILLUS.length; i++) {
-      if (Math.hypot(x - deviceX(i), y - cyHit) < ILLUS_R) { hit = i; break; }
-    }
-    if (hit === activeIndex) triggerSource(hit);
-    else if (hit >= 0) setActiveIndex(hit);
-  } else {
-    setActiveIndex(Math.round(offset / SPACING));
-  }
+  if (moved) setActiveIndex(Math.round(offset / SPACING));
 });
 
 function drawDevice(cx, cy, R, alpha, active, fade = 1) {
@@ -493,7 +583,7 @@ function frame(now) {
   if (!dragging) offsetTarget = activeIndex * SPACING;
   offset += (offsetTarget - offset) * 0.18;
 
-  const { domHz } = analyse(now);
+  analyse(now);
 
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
@@ -560,46 +650,46 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-// --- Toggle Computer / Playback ---------------------------------------------
-function setCenterSource(src) {
-  const valid = ['computer', 'playback'];
-  const prev = centerSource;
-  centerSource = valid.includes(src) ? src : 'computer';
-  document.querySelectorAll('.toggle .opt').forEach(o =>
-    o.classList.toggle('active', o.dataset.src === centerSource));
-  lbl1Title.classList.toggle('on', centerSource === 'playback');
-  try { localStorage.setItem('centerSource', centerSource); } catch (_) {}
+// === UI HOOKS ===============================================================
+const settingsEl = document.getElementById('settings');
+document.getElementById('settingsBtn').addEventListener('click', () => settingsEl.classList.add('show'));
+document.getElementById('closeBtn').addEventListener('click', () => settingsEl.classList.remove('show'));
 
-  if (currentMode === 'mic' && activeIndex === 1) {
-    if (prev === 'playback' && centerSource !== 'playback') {
-      stopTrack();
-    }
-    if (centerSource === 'playback' && currentTrack !== PLAYBACK_SRC) {
-      ensureMic().then(ok => {
-        if (!ok) return;
-        if (!audioEl) audioEl = new Audio();
-        audioEl.src  = PLAYBACK_SRC;
-        audioEl.loop = true;
-        audioEl.play().catch(e => console.error('[playback]', e));
-        currentTrack = PLAYBACK_SRC;
-      });
-    }
-  }
+const sensEl  = document.getElementById('sens');
+const sensVal = document.getElementById('sensVal');
+sensEl.value = Math.round(sensitivity * 100);
+sensVal.textContent = sensEl.value + '%';
+sensEl.addEventListener('input', () => {
+  sensitivity = sensEl.value / 100;
+  sensVal.textContent = sensEl.value + '%';
+  try { localStorage.setItem('sens', sensEl.value); } catch (_) {}
+});
+
+function refreshCenterSourceBtns() {
+  document.querySelectorAll('.panel [data-src]').forEach(b =>
+    b.classList.toggle('on', b.dataset.src === centerSource));
 }
-document.querySelectorAll('.toggle .opt').forEach(o => {
-  o.addEventListener('pointerdown', e => e.stopPropagation());
-  o.addEventListener('pointerup',   e => e.stopPropagation());
-  o.addEventListener('click', e => {
-    e.stopPropagation();
-    setCenterSource(o.dataset.src);
+document.querySelectorAll('.panel [data-src]').forEach(b => {
+  b.addEventListener('click', async () => {
+    centerSource = b.dataset.src;
+    try { localStorage.setItem('centerSource', centerSource); } catch (_) {}
+    refreshCenterSourceBtns();
+    // If env.02 is the active device, re-engage immediately with the new source.
+    if (activeIndex === 1 && running) await triggerSource(1);
   });
 });
-setCenterSource(localStorage.getItem('centerSource') || 'computer');
+refreshCenterSourceBtns();
 
-// Intro overlay: first tap unlocks AudioContext + getUserMedia (Safari/iOS gate).
+// nav: ← START →
+document.getElementById('prevBtn').addEventListener('click', () => setActiveIndex(activeIndex - 1));
+document.getElementById('nextBtn').addEventListener('click', () => setActiveIndex(activeIndex + 1));
+document.getElementById('startBtn').addEventListener('click', () => triggerSource(activeIndex));
+updateNavButtons();
+
+// Intro overlay: prime the audio context inside a user gesture (Safari/iOS).
 document.getElementById('enableBtn').addEventListener('click', async () => {
-  await ensureMic();
-  startMic();
+  await ensureCtx();      // wake AudioContext
+  await ensureMic();      // ask for mic permission upfront
   document.getElementById('enable').classList.add('hide');
 });
 </script>
