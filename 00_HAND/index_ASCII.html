@@ -89,8 +89,9 @@ const startTime = performance.now();
 const fmt = v => (v >= 0 ? '+' : '-') + String(Math.abs(Math.round(v))).padStart(4, '0');
 
 const CELL = 11;
+const FONT = 11;
 const CLEARING = 34;
-const ICON_DROP = 200;   // triangle's pixels below screen centre (nearer the bottom UI)
+const ICON_DROP = 64;
 let cols, rows;
 
 function resize() {
@@ -106,6 +107,7 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
+// --- deterministic hash noise (infinite, stable world) ---
 function hash(x, y) {
   let h = x * 374761393 + y * 668265263;
   h = (h ^ (h >> 13)) * 1274126177;
@@ -128,25 +130,26 @@ function fbm(x, y) {
   return v;
 }
 
-// Halftone dot field: the same noise terrain as the ASCII page, but each grid
-// cell is a single dot whose radius + brightness track the local density `d`.
-// Sparse ground stays as small dim dots; canopy reads as big bright green dots.
-const DOT_MAX = CELL * 0.42;          // largest dot ~ fills its cell
-const DOT_FLOOR = 0.30;               // below this density -> negative space
-function worldDot(wx, wy) {
+const TREES = ['o', 'O', '#', '%', '@'];
+const SHRUB = ['=', '+', '*'];
+const GROUND = ['.', ':', '-'];
+
+function worldCell(wx, wy) {
   const d = fbm(wx * 0.08, wy * 0.08);
-  let t = (d - DOT_FLOOR) / (0.74 - DOT_FLOOR);   // active band -> 0..1
-  if (t <= 0.02) return null;
-  t = t > 1 ? 1 : t;
-  // tiny per-cell jitter so the field doesn't look like a rigid grid
-  const j = (hash(wx, wy) - 0.5) * 0.12;
-  const radius = DOT_MAX * (0.16 + 0.84 * Math.min(1, Math.max(0, t + j)));
-  const g = Math.floor(70 + t * 155);             // dim forest -> bright canopy
-  const color = `rgb(${Math.floor(g * 0.34)},${g},${Math.floor(g * 0.42)})`;
-  const alpha = 0.22 + 0.62 * t;
-  return { color, radius, alpha };
+  const detail = hash(wx, wy);
+  if (d > 0.56) {
+    const ch = TREES[Math.floor(detail * TREES.length)];
+    const g = 110 + Math.floor(d * 120);
+    return { ch, color: `rgb(${Math.floor(g*0.4)},${g},${Math.floor(g*0.4)})` };
+  } else if (d > 0.48) {
+    return { ch: SHRUB[Math.floor(detail * SHRUB.length)], color: '#3f6b40' };
+  } else if (detail > 0.62) {
+    return { ch: GROUND[Math.floor(hash(wy, wx) * GROUND.length)], color: '#2c322c' };
+  }
+  return null;
 }
 
+// --- icon state ---
 let posX = 0, posY = 0;
 let course = -Math.PI / 2;
 let courseTarget = -Math.PI / 2;
@@ -155,40 +158,41 @@ const SPEED = 1.1;
 const STEER_STEP = 0.6;
 let last = performance.now();
 
-// --- forward footpath: committed world-space dots the triangle walks along ---
-const HEAD_OFFSET = ICON_DROP / CELL;   // world gap between (posX,posY) and the on-screen triangle
-const PATH_GAP    = 0.95;               // spacing between footpath dots, in world cells
-const PATH_REACH  = 6.5;                // how far ahead (cells) the footpath is planned
-const PATH_CURVE  = 0.22;               // how gently the planned route eases into a turn
-const path = [];                        // committed world points ahead of the head (nearest first)
-let frontierAng = course;               // heading at the far end of the planned route
-let frontierX = posX, frontierY = posY + HEAD_OFFSET;
+const trail = [];
 
 const ripples = [];
 const RIPPLE_LIFE = 2600;
+const RIPPLE_SPEED = 0.013;
 const RIPPLE_MAX_R = 12;
+const RIPPLE_DRIFT = 10;
+const RIPPLE_GLYPHS = ['◦', '∘', '○', '◯'];
 
 let deviation = null;
 const DEVIATION_LIFE = 1400;
 
-function emitSignal(dir) {
-  // place the bird call ahead of the triangle and to ITS left/right (relative to
-  // the heading), not the screen — a right call always sits on the triangle's
-  // right whichever way it faces.
-  const fwd  = 35 + Math.random() * 12;         // cells ahead, along the heading
-  const side = dir * (20 + Math.random() * 8);  // cells to its right (+) / left (-)
-  const fX = Math.cos(course),  fY = Math.sin(course);   // forward vector
-  const rX = -Math.sin(course), rY = Math.cos(course);   // triangle's right vector
-  const wx = posX + fX * fwd + rX * side;
-  const wy = (posY + HEAD_OFFSET) + fY * fwd + rY * side;
-  // the bird call (ripple) appears now; it re-plans the footpath, whose far end
-  // bends toward the new heading. The triangle turns later, walking into the curve.
-  ripples.push({ wx, wy, t0: performance.now() });
-  signals++;
-  deviation = { fromAng: course, toAng: course + dir * STEER_STEP, t0: performance.now() };
+// emitSignal: visualization only. Triggered by NetBus messages from the
+// control page (which is the only thing that talks to the MCU).
+function emitSignal(dir) {                              // -1 left, +1 right
+  const hx = cols / 2, hy = rows / 2;
+  const m = RIPPLE_MAX_R;
+  const xlo = m + 1, xhi = Math.max(xlo + 1, hx - m - 1);
+  const offX = dir * (xlo + Math.random() * (xhi - xlo));
+  const ylo = -(hy - m - 1);
+  const yhi = Math.max(ylo, -(m + RIPPLE_DRIFT + 1));
+  const offY = ylo + Math.random() * (yhi - ylo);
+  ripples.push({ wx: posX + offX, wy: posY + offY, t0: performance.now() });
+  deviation = { fromAng: courseTarget, t0: performance.now() };
   courseTarget += dir * STEER_STEP;
+  signals++;
 }
 
+// ============================================================================
+// NetBus — listen for `hand.signal` from the control page and run the visual
+// pulse. Now also bidirectional: the operator at the projection laptop can
+// press arrow keys / 1 / 2 to fire the MCU relay directly AND publish on the
+// bus so any other open instance stays in sync.
+// Discovery: ?bus=host:port  OR  ws://<page hostname>:8090/
+// ============================================================================
 class NetBus extends EventTarget {
   constructor(url) {
     super();
@@ -205,6 +209,7 @@ class NetBus extends EventTarget {
     try { this.ws = new WebSocket(this.url); }
     catch { return setTimeout(() => this._connect(), 2000); }
     this.ws.onopen = () => {
+      console.log('[bus] open', this.url);
       const q = this._queue; this._queue = [];
       for (const s of q) try { this.ws.send(s); } catch {}
     };
@@ -235,6 +240,10 @@ try {
   });
 } catch (e) { console.log('[bus] NetBus non disponibile', e); }
 
+// ----------------------------------------------------------------------------
+// Direct WebSocket to the hand MCU (so this page can fire the TENS relay
+// without going through the control page). Host overridable: ?mcu=hand.local
+// ----------------------------------------------------------------------------
 const MCU_HOST = new URLSearchParams(location.search).get('mcu') || 'hand.local';
 const MCU_URL  = `ws://${MCU_HOST}:81/`;
 let mcuWs = null;
@@ -254,13 +263,14 @@ function sendMcu(ch) {
   return false;
 }
 
+// Keyboard input — mirrors the firmware cooldown (1000 ms).
 let kbdCooldownUntil = 0;
 function fireFromKeyboard(dir) {
   const now = performance.now();
   if (now < kbdCooldownUntil) return;
   kbdCooldownUntil = now + 1000;
-  emitSignal(dir);
-  sendMcu(dir < 0 ? '1' : '2');
+  emitSignal(dir);                                    // local visual
+  sendMcu(dir < 0 ? '1' : '2');                       // MCU relay
   if (bus) bus.postMessage({ type: 'hand.signal', dir, from: 'hand-projected' });
 }
 window.addEventListener('keydown', e => {
@@ -268,65 +278,42 @@ window.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight' || e.key === '2') { fireFromKeyboard(+1); e.preventDefault(); }
 });
 
-const RIPPLE_BAND = 1.4;
 function rippleAt(wx, wy, now) {
   let best = null;
   for (const rp of ripples) {
     const age = now - rp.t0;
-    const t = age / RIPPLE_LIFE;                         // 0..1 over its life
-    if (t >= 1) continue;
-    // ease-out expansion: keeps drifting outward and slowing, never freezes
-    const radius = RIPPLE_MAX_R * (1 - (1 - t) * (1 - t));
+    const radius = Math.min(age * RIPPLE_SPEED, RIPPLE_MAX_R);
     const dx = wx - rp.wx, dy = wy - rp.wy;
     const dist = Math.sqrt(dx * dx + dy * dy);
     const band = Math.abs(dist - radius);
-    if (band < RIPPLE_BAND) {
-      const prox = 1 - band / RIPPLE_BAND;               // 1 on the ring line
-      const fade = 1 - t;
-      const ease = fade * fade * (3 - 2 * fade);         // smoothstep -> gentle tail
-      const a = prox * ease;
-      if (!best || a > best.a) best = { a, prox };
+    if (band < 1.3) {
+      const life = 1 - age / RIPPLE_LIFE;
+      const strength = (1 - band / 1.3) * life;
+      if (!best || strength > best.strength) best = { strength, life };
     }
   }
   if (!best) return null;
-  const v = Math.floor(150 + best.prox * 105);
-  const alpha = (best.a * 0.9).toFixed(3);
-  return { radius: 1.3 + best.prox * 3.0, color: `rgba(${Math.floor(v*0.7)},${v},${v},${alpha})` };
+  const gi = Math.min(RIPPLE_GLYPHS.length - 1,
+                      Math.floor((1 - best.life) * RIPPLE_GLYPHS.length));
+  const v = Math.floor(120 + best.strength * 135);
+  const alpha = Math.pow(best.life, 1.5);
+  return { ch: RIPPLE_GLYPHS[gi], color: `rgba(${Math.floor(v*0.7)},${v},${v},${alpha.toFixed(3)})` };
 }
 
 function frame(now) {
   const dt = Math.min((now - last) / 16.67, 3);
   last = now;
 
+  course += (courseTarget - course) * Math.min(1, 0.12 * dt);
   const step = SPEED * dt * 0.05;
-
-  // 1) extend the planned footpath until it reaches PATH_REACH cells ahead, easing
-  //    its heading toward the committed course so a new turn lays a gentle curve.
-  let guard = 0;
-  while (Math.hypot(frontierX - posX, frontierY - (posY + HEAD_OFFSET)) < PATH_REACH
-         && path.length < 80 && guard++ < 64) {
-    frontierAng += Math.atan2(Math.sin(courseTarget - frontierAng),
-                              Math.cos(courseTarget - frontierAng)) * PATH_CURVE;
-    frontierX += Math.cos(frontierAng) * PATH_GAP;
-    frontierY += Math.sin(frontierAng) * PATH_GAP;
-    path.push({ x: frontierX, y: frontierY });
-  }
-
-  // 2) walk the head forward by `step`, deleting each dot it reaches and steering
-  //    toward the next one — so it rounds the curve gently, dot by dot.
-  let headX = posX, headY = posY + HEAD_OFFSET;
-  let remaining = step;
-  while (remaining > 0 && path.length) {
-    const tgt = path[0];
-    const dx = tgt.x - headX, dy = tgt.y - headY;
-    const d = Math.hypot(dx, dy);
-    if (d > 0.0001) course = Math.atan2(dy, dx);
-    if (d <= remaining) { headX = tgt.x; headY = tgt.y; remaining -= d; path.shift(); }
-    else { headX += dx / d * remaining; headY += dy / d * remaining; remaining = 0; }
-  }
-  posX = headX;
-  posY = headY - HEAD_OFFSET;
+  posX += Math.cos(course) * step;
+  posY += Math.sin(course) * step;
   traveled += step;
+
+  if (!trail.length || Math.hypot(posX - trail[trail.length-1].x, posY - trail[trail.length-1].y) > 1.5) {
+    trail.push({ x: posX, y: posY });
+    if (trail.length > 120) trail.shift();
+  }
 
   const camX = posX, camY = posY;
   const halfC = cols / 2, halfR = rows / 2;
@@ -336,6 +323,17 @@ function frame(now) {
 
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  ctx.font = FONT + "px 'Courier New', monospace";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  ctx.fillStyle = '#444';
+  for (const tp of trail) {
+    const sx = originX + (tp.x - camX) * CELL;
+    const sy = originY + (tp.y - camY) * CELL;
+    if (sx < -20 || sx > window.innerWidth + 20 || sy < -20 || sy > window.innerHeight + 20) continue;
+    ctx.fillText('·', sx, sy);
+  }
 
   for (let i = ripples.length - 1; i >= 0; i--) {
     if (now - ripples[i].t0 > RIPPLE_LIFE) ripples.splice(i, 1);
@@ -348,27 +346,12 @@ function frame(now) {
       const sx = originX + (wx - camX) * CELL;
       const sy = originY + (wy - camY) * CELL;
       if ((sx - iconX) ** 2 + (sy - iconY) ** 2 < CLEARING * CLEARING) continue;
-
-      const dot = worldDot(wx, wy);
-      if (dot) {
-        ctx.globalAlpha = dot.alpha;
-        ctx.fillStyle = dot.color;
-        ctx.beginPath();
-        ctx.arc(sx, sy, dot.radius, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
+      const base = worldCell(wx, wy);
+      if (base) { ctx.fillStyle = base.color; ctx.fillText(base.ch, sx, sy); }
       const rip = rippleAt(wx, wy, now);
-      if (rip) {
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = rip.color;
-        ctx.beginPath();
-        ctx.arc(sx, sy, rip.radius, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      if (rip) { ctx.fillStyle = rip.color; ctx.fillText(rip.ch, sx, sy); }
     }
   }
-  ctx.globalAlpha = 1;
 
   const fade = ctx.createLinearGradient(0, window.innerHeight * 0.4, 0, window.innerHeight);
   fade.addColorStop(0, 'rgba(0,0,0,0)');
@@ -376,29 +359,15 @@ function frame(now) {
   ctx.fillStyle = fade;
   ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
-  // footpath — the committed world dots the triangle is walking along. World-
-  // anchored, so they scroll toward the triangle and vanish as it consumes them.
-  ctx.fillStyle = '#9a9a9a';
-  for (let i = 0; i < path.length; i++) {
-    const sx = originX + (path[i].x - camX) * CELL;
-    const sy = originY + (path[i].y - camY) * CELL;
-    const k = 1 - i / Math.max(1, path.length - 1);     // nearest brightest, far fainter
-    ctx.globalAlpha = 0.06 + 0.40 * k;
-    ctx.beginPath();
-    ctx.arc(sx, sy, 1.1 + 0.7 * k, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
   if (deviation) {
     const age = now - deviation.t0;
     if (age < DEVIATION_LIFE) {
       const k = 1 - age / DEVIATION_LIFE;
-      const d2 = Math.atan2(Math.sin(deviation.toAng - deviation.fromAng), Math.cos(deviation.toAng - deviation.fromAng));
+      const d2 = Math.atan2(Math.sin(course - deviation.fromAng), Math.cos(course - deviation.fromAng));
       ctx.strokeStyle = `rgba(255,33,24,${(0.95 * k).toFixed(3)})`;
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(iconX, iconY, 34, deviation.fromAng, deviation.toAng, d2 < 0);
+      ctx.arc(iconX, iconY, 34, deviation.fromAng, course, d2 < 0);
       ctx.stroke();
     } else {
       deviation = null;

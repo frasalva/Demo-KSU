@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIXEL // PATTERN</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  :root {
+    --bg: #0d0d0e;
+    --fg: #ececec;
+    --dim: #6f6f6f;
+    --line: rgba(255,255,255,0.10);
+    --red: #ff2118;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: var(--bg); overflow: hidden; }
+  body { font-family: 'Space Mono', 'Courier New', monospace; color: var(--fg); }
+
+  #scene { position: fixed; inset: 0; display: block; }
+
+  /* ---------- HUD corners (echo of index.html) ---------- */
+  .hud { position: fixed; inset: 0; pointer-events: none; text-transform: uppercase; }
+  .corner { position: absolute; }
+  .tl-blk { top: 28px; left: 36px; }
+  .tr-blk { top: 28px; right: 36px; text-align: right; }
+  .bl-blk { bottom: 28px; left: 36px; }
+  .br-blk { bottom: 28px; right: 36px; text-align: right; }
+  .tag  { font-size: 10px; letter-spacing: 3px; color: var(--dim); margin-bottom: 4px; }
+  .big  { font-size: 16px; letter-spacing: 2px; font-weight: 700;
+          display: flex; align-items: center; gap: 12px; }
+  .tr-blk .big { justify-content: flex-end; }
+  .data { font-size: 11px; letter-spacing: 1.5px; line-height: 1.85; }
+  .data b { color: var(--dim); font-weight: 400; }
+  .rec { width: 9px; height: 9px; border-radius: 50%; background: var(--red);
+         box-shadow: 0 0 10px var(--red); animation: blink 1.3s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .12; } }
+
+  /* ---------- Control panel ---------- */
+  .panel {
+    position: fixed; right: 28px; top: 80px; bottom: 80px;
+    width: 320px;
+    background: rgba(12,12,14,0.78);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 22px 22px;
+    z-index: 10;
+    overflow-y: auto;
+    pointer-events: auto;
+    transition: transform .25s ease, opacity .2s ease;
+  }
+  .panel.hidden { transform: translateX(calc(100% + 40px)); opacity: 0; pointer-events: none; }
+  .panel::-webkit-scrollbar { width: 6px; }
+  .panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 6px; }
+
+  .group { margin-bottom: 22px; }
+  .group:last-child { margin-bottom: 0; }
+  .group h2 {
+    font-size: 10px; letter-spacing: 4px; color: var(--dim);
+    font-weight: 400; text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px; margin-bottom: 14px;
+  }
+
+  .row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .row:last-child { margin-bottom: 0; }
+  .row .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .row label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--dim); }
+  .row .val   { font-size: 10px; letter-spacing: 1.5px; color: var(--fg); }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 2px;
+    background: rgba(255,255,255,0.18);
+    outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--fg); cursor: pointer;
+    box-shadow: 0 0 6px rgba(255,255,255,0.25);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 12px; height: 12px; border: 0; border-radius: 50%;
+    background: var(--fg); cursor: pointer;
+  }
+
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px;
+         border: 1px solid var(--line); border-radius: 4px; padding: 3px; }
+  .seg button {
+    background: transparent; border: 0; color: var(--dim);
+    padding: 7px 4px; border-radius: 3px; cursor: pointer;
+    font: 700 9px/1 'Space Mono', monospace;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    transition: background .15s, color .15s;
+  }
+  .seg button:hover { color: var(--fg); }
+  .seg button.on { background: rgba(255,255,255,0.10); color: var(--fg); }
+
+  .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+  .swatch { width: 28px; height: 28px; border-radius: 4px; cursor: pointer;
+            border: 2px solid transparent; transition: border-color .15s, transform .1s; }
+  .swatch:hover { transform: scale(1.06); }
+  .swatch.on { border-color: var(--fg); }
+
+  /* ---------- Top toolbar ---------- */
+  .toolbar { position: fixed; top: 28px; left: 50%; transform: translateX(-50%);
+             display: flex; gap: 8px; z-index: 11; pointer-events: auto; }
+  .pill {
+    background: rgba(12,12,14,0.78); border: 1px solid var(--line);
+    color: var(--fg); padding: 9px 16px; border-radius: 100px;
+    font: 700 10px/1 'Space Mono', monospace; letter-spacing: 2.5px; text-transform: uppercase;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    transition: background .15s, border-color .15s;
+  }
+  .pill:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.35); }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+  .pill.on .dot { background: var(--fg); box-shadow: 0 0 6px var(--fg); }
+
+  .upload {
+    width: 100%; background: rgba(255,255,255,0.05);
+    border: 1px solid var(--line); color: var(--fg);
+    padding: 9px 10px; border-radius: 4px; cursor: pointer;
+    font: 700 9px/1 'Space Mono', monospace; letter-spacing: 1.5px; text-transform: uppercase;
+    transition: background .15s, border-color .15s;
+  }
+  .upload:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.35); }
+  .upload.loaded { border-color: rgba(255,255,255,0.45); color: var(--fg); }
+  .upload[disabled] { opacity: .5; cursor: default; }
+  .seg button:disabled { opacity: 0.3; cursor: not-allowed; }
+  .seg button:disabled:hover { color: var(--dim); }
+  .note { font-size: 9px; letter-spacing: 1px; color: var(--dim); line-height: 1.6; margin-top: 2px; }
+
+  /* ---------- FX overlays (subtle, matches index) ---------- */
+  .fx { position: fixed; inset: 0; pointer-events: none; }
+  .fx.scan { background: repeating-linear-gradient(to bottom,
+             rgba(255,255,255,.025) 0 1px, transparent 1px 3px); mix-blend-mode: overlay; }
+  .fx.vig  { box-shadow: inset 0 0 220px 40px rgba(0,0,0,.85); }
+
+  /* ---------- Light background mode (e.g. "ink" palette) ---------- */
+  body.light .hud { color: #1a1a1a; }
+  body.light .tag, body.light .data b { color: #888; }
+  body.light .fx.vig { box-shadow: inset 0 0 220px 40px rgba(255,255,255,.55); }
+
+  @media (max-width: 720px) {
+    .panel { right: 12px; left: 12px; width: auto; top: 70px; bottom: 70px; }
+    .tl-blk, .bl-blk { left: 16px; }
+    .tr-blk, .br-blk { right: 16px; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div class="fx vig"></div>
+  <div class="fx scan"></div>
+
+  <div class="hud">
+    <div class="corner tl-blk">
+      <div class="tag">// session</div>
+      <div class="big">PIXEL.PATTERN</div>
+    </div>
+    <div class="corner tr-blk">
+      <div class="tag">live <span id="tc">00:00:00</span></div>
+      <div class="big">ITERATE <span class="rec"></span></div>
+    </div>
+    <div class="corner bl-blk">
+      <div class="data"><b>shape</b> <span id="dShape">cross</span><br>
+                       <b>grad</b>&nbsp; <span id="dGrad">radial</span></div>
+    </div>
+    <div class="corner br-blk">
+      <div class="data"><b>cell</b>&nbsp; <span id="dPat">block</span><br>
+                       <b>wave</b> <span id="dWave">0.50 hz</span></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="pill" id="randomBtn"><span class="dot"></span> shuffle</button>
+    <button class="pill on" id="toggleBtn"><span class="dot"></span> panel</button>
+    <button class="pill" id="saveBtn"><span class="dot"></span> save .png</button>
+  </div>
+
+  <div class="panel" id="panel">
+
+    <div class="group">
+      <h2>// shape</h2>
+      <div class="row">
+        <label>form</label>
+        <div class="seg" data-key="shape">
+          <button data-v="cross" class="on">cross</button>
+          <button data-v="diamond">diamond</button>
+          <button data-v="plus">plus</button>
+          <button data-v="square">square</button>
+          <button data-v="circle">circle</button>
+          <button data-v="svg" disabled>svg</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="head"><label>arm length</label><span class="val" id="vArm">220</span></div>
+        <input type="range" id="rArm" min="60" max="420" value="220">
+      </div>
+      <div class="row">
+        <div class="head"><label>thickness</label><span class="val" id="vThick">60</span></div>
+        <input type="range" id="rThick" min="10" max="200" value="60">
+      </div>
+      <div class="row">
+        <div class="head"><label>rotation</label><span class="val" id="vRot">0&deg;</span></div>
+        <input type="range" id="rRot" min="0" max="360" value="0">
+      </div>
+      <div class="row">
+        <button class="upload" id="shapeUpload">&#9645; load shape svg</button>
+        <input type="file" id="shapeFile" accept=".svg,image/svg+xml" hidden>
+        <div class="note">Silhouette is used as a mask &mdash; arm length scales it.</div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>// gradient</h2>
+      <div class="row">
+        <label>field</label>
+        <div class="seg" data-key="gradient">
+          <button data-v="radial" class="on">radial</button>
+          <button data-v="linear">linear</button>
+          <button data-v="conic">conic</button>
+          <button data-v="rings">rings</button>
+          <button data-v="noise">noise</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="head"><label>angle</label><span class="val" id="vAng">90&deg;</span></div>
+        <input type="range" id="rAng" min="0" max="360" value="90">
+      </div>
+      <div class="row">
+        <div class="head"><label>scale</label><span class="val" id="vScale">1.00</span></div>
+        <input type="range" id="rScale" min="20" max="300" value="100">
+      </div>
+      <div class="row">
+        <div class="head"><label>contrast</label><span class="val" id="vContrast">1.0</span></div>
+        <input type="range" id="rContrast" min="20" max="300" value="100">
+      </div>
+      <div class="row">
+        <label>palette</label>
+        <div class="swatches" id="swatches"></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>// pattern</h2>
+      <div class="row">
+        <label>cell</label>
+        <div class="seg" data-key="pattern">
+          <button data-v="block" class="on">block</button>
+          <button data-v="dot">dot</button>
+          <button data-v="ring">ring</button>
+          <button data-v="diamond">diamond</button>
+          <button data-v="cross">cross</button>
+          <button data-v="svg" disabled>svg</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="upload" id="cellUpload">&#9645; load cell svg</button>
+        <input type="file" id="cellFile" accept=".svg,image/svg+xml" hidden>
+        <div class="note">Stamped at each grid point, faded by the gradient.</div>
+      </div>
+      <div class="row">
+        <div class="head"><label>cell size</label><span class="val" id="vCell">22</span></div>
+        <input type="range" id="rCell" min="6" max="48" value="22">
+      </div>
+      <div class="row">
+        <div class="head"><label>gap</label><span class="val" id="vGap">3</span></div>
+        <input type="range" id="rGap" min="0" max="20" value="3">
+      </div>
+      <div class="row">
+        <div class="head"><label>fill ratio</label><span class="val" id="vFill">82%</span></div>
+        <input type="range" id="rFill" min="20" max="100" value="82">
+      </div>
+      <div class="row">
+        <div class="head"><label>quantize</label><span class="val" id="vQ">8</span></div>
+        <input type="range" id="rQ" min="2" max="16" value="8">
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>// wave</h2>
+      <div class="row">
+        <div class="head"><label>opacity</label><span class="val" id="vOp">75%</span></div>
+        <input type="range" id="rOp" min="0" max="100" value="75">
+      </div>
+      <div class="row">
+        <div class="head"><label>amplitude</label><span class="val" id="vAmp">60%</span></div>
+        <input type="range" id="rAmp" min="0" max="100" value="60">
+      </div>
+      <div class="row">
+        <div class="head"><label>frequency</label><span class="val" id="vFreq">0.50 hz</span></div>
+        <input type="range" id="rFreq" min="0" max="200" value="50">
+      </div>
+      <div class="row">
+        <div class="head"><label>direction</label><span class="val" id="vDir">radial</span></div>
+        <input type="range" id="rDir" min="0" max="3" value="0" step="1">
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>// export</h2>
+      <div class="row">
+        <div class="head"><label>frames</label><span class="val" id="vFrames">48</span></div>
+        <input type="range" id="rFrames" min="8" max="120" value="48" step="1">
+      </div>
+      <div class="row">
+        <div class="head"><label>loop length</label><span class="val" id="vLoopLen">2.00 s</span></div>
+        <div class="note">One full wave cycle = 1 / frequency. Frequency 0 falls back to 2 s.</div>
+      </div>
+      <div class="row">
+        <button class="upload" id="exportBtn">&#8595; export loop (.zip)</button>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+'use strict';
+
+const canvas = document.getElementById('scene');
+const ctx    = canvas.getContext('2d');
+
+// ---------- Palettes ----------
+const PALETTES = [
+  { name:'paper',   bg:'#0d0d0e', a:[235,235,235], b:[120,120,120] },
+  { name:'ink',     bg:'#f4f4f4', a:[ 18, 18, 18], b:[170,170,170] },
+  { name:'red',     bg:'#0d0d0e', a:[255, 60, 50], b:[120, 18, 14] },
+  { name:'cyan',    bg:'#08111a', a:[120,220,255], b:[ 30, 90,140] },
+  { name:'mint',    bg:'#0a1410', a:[150,255,200], b:[ 30,120, 80] },
+  { name:'amber',   bg:'#100a04', a:[255,190, 80], b:[160, 80, 20] },
+  { name:'violet',  bg:'#0f0a14', a:[200,150,255], b:[ 90, 50,160] },
+];
+
+// ---------- State ----------
+const state = {
+  shape:    'cross',
+  arm:      220,
+  thick:    60,
+  rot:      0,            // degrees
+  gradient: 'radial',
+  angle:    90,           // degrees
+  scale:    1.0,
+  contrast: 1.0,
+  palette:  0,
+  pattern:  'block',
+  cell:     22,
+  gap:      3,
+  fill:     0.82,
+  quant:    8,
+  opacity:  0.75,
+  amp:      0.60,
+  freq:     0.50,         // hz
+  dir:      0,            // 0=radial 1=h 2=v 3=diag
+  frames:   48,           // export frame count
+};
+
+// ---------- Canvas sizing ----------
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = window.innerWidth  * dpr;
+  canvas.height = window.innerHeight * dpr;
+  canvas.style.width  = window.innerWidth  + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- Cheap deterministic value-noise ----------
+function hash(x, y) {
+  let h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return h - Math.floor(h);
+}
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi,        yf = y - yi;
+  const u = xf*xf*(3-2*xf), v = yf*yf*(3-2*yf);
+  const a = hash(xi  , yi  );
+  const b = hash(xi+1, yi  );
+  const c = hash(xi  , yi+1);
+  const d = hash(xi+1, yi+1);
+  return (a*(1-u) + b*u)*(1-v) + (c*(1-u) + d*u)*v;
+}
+
+// ---------- Shape mask: 1 inside, 0 outside ----------
+function insideShape(dx, dy) {
+  // rotate point into shape space
+  const r = state.rot * Math.PI / 180;
+  const cs = Math.cos(-r), sn = Math.sin(-r);
+  const x = dx*cs - dy*sn;
+  const y = dx*sn + dy*cs;
+  const arm   = state.arm;
+  const half  = state.thick / 2;
+
+  switch (state.shape) {
+    case 'svg': {
+      if (!shapeMask) return false;
+      const u = (x / state.arm) * 0.5 + 0.5;
+      const v = (y / state.arm) * 0.5 + 0.5;
+      if (u < 0 || u > 1 || v < 0 || v > 1) return false;
+      const ix = (u * (shapeMask.size - 1)) | 0;
+      const iy = (v * (shapeMask.size - 1)) | 0;
+      return shapeMask.alpha[iy * shapeMask.size + ix] > 40;
+    }
+    case 'cross':
+      // vertical + horizontal bar with same thickness
+      return (Math.abs(x) <= half && Math.abs(y) <= arm)
+          || (Math.abs(y) <= half && Math.abs(x) <= arm);
+    case 'plus': {
+      // taller body, shorter side arms (like the reference image)
+      const bodyHalf = arm;
+      const sideArm  = arm * 0.55;
+      return (Math.abs(x) <= half && Math.abs(y) <= bodyHalf)
+          || (Math.abs(y) <= half && Math.abs(x) <= sideArm);
+    }
+    case 'diamond':
+      return (Math.abs(x) + Math.abs(y)) <= arm;
+    case 'square':
+      return Math.abs(x) <= arm && Math.abs(y) <= arm;
+    case 'circle':
+      return (x*x + y*y) <= arm*arm;
+  }
+  return false;
+}
+
+// ---------- Gradient field: returns 0..1 ----------
+function gradientAt(dx, dy, time) {
+  const s = state.scale;
+  switch (state.gradient) {
+    case 'linear': {
+      const a = state.angle * Math.PI / 180;
+      const x = dx * Math.cos(a) + dy * Math.sin(a);
+      return 0.5 + 0.5 * Math.tanh(x / (180 * s));
+    }
+    case 'conic': {
+      const a0 = state.angle * Math.PI / 180;
+      const t = (Math.atan2(dy, dx) - a0) / (Math.PI * 2);
+      return t - Math.floor(t);
+    }
+    case 'rings': {
+      const r = Math.hypot(dx, dy);
+      return 0.5 + 0.5 * Math.sin(r / (18 * s));
+    }
+    case 'noise': {
+      const r = state.angle * Math.PI / 180;
+      return vnoise((dx*Math.cos(r) - dy*Math.sin(r)) / (60*s),
+                    (dx*Math.sin(r) + dy*Math.cos(r)) / (60*s));
+    }
+    case 'radial':
+    default: {
+      const r = Math.hypot(dx, dy);
+      const ref = state.arm * s;
+      return 1 - Math.min(1, r / ref);
+    }
+  }
+}
+
+// ---------- Wave: 0..1 modulation ----------
+function waveAt(dx, dy, time) {
+  let phase;
+  switch (state.dir) {
+    case 1: phase = dx * 0.02; break;            // horizontal
+    case 2: phase = dy * 0.02; break;            // vertical
+    case 3: phase = (dx + dy) * 0.014; break;    // diagonal
+    default: phase = Math.hypot(dx, dy) * 0.018; // radial
+  }
+  const t = time * state.freq * Math.PI * 2;
+  return 0.5 + 0.5 * Math.sin(phase * 3 - t);
+}
+
+// ---------- SVG assets ----------
+let shapeMask = null;   // { alpha: Uint8ClampedArray, size }  silhouette mask
+let cellStamp = null;   // offscreen <canvas> used as a stamp
+let exporting = false;  // pauses the live loop while rendering frames
+
+// ---------- Drawing ----------
+// render() is time-pure: same `time` -> same frame. Used by both the live
+// loop and the frame-by-frame exporter so exports are deterministic.
+function render(time) {
+  const W = window.innerWidth, H = window.innerHeight;
+  const cx = W / 2, cy = H / 2;
+
+  const pal = PALETTES[state.palette];
+  ctx.fillStyle = pal.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const step = state.cell + state.gap;
+  if (step <= 0) return;
+
+  // bounding rect for the shape (rotated)
+  const r = Math.abs(state.rot * Math.PI / 180);
+  const reach = (state.arm + state.thick) * (Math.abs(Math.sin(r)) + Math.abs(Math.cos(r))) + state.cell;
+  const minX = Math.max(0, cx - reach), maxX = Math.min(W, cx + reach);
+  const minY = Math.max(0, cy - reach), maxY = Math.min(H, cy + reach);
+
+  const half = state.cell * 0.5 * state.fill;
+  const q    = state.quant;
+
+  for (let py = Math.floor(minY); py <= maxY; py += step) {
+    for (let px = Math.floor(minX); px <= maxX; px += step) {
+      const dx = px - cx;
+      const dy = py - cy;
+      if (!insideShape(dx, dy)) continue;
+
+      const g = gradientAt(dx, dy, time);
+      const w = waveAt(dx, dy, time);
+      // mix gradient with wave-controlled amplitude
+      let v = g * (1 - state.amp) + (g * w) * state.amp;
+      // contrast around 0.5
+      v = 0.5 + (v - 0.5) * state.contrast;
+      v = Math.max(0, Math.min(1, v));
+      // quantize
+      v = Math.round(v * (q - 1)) / (q - 1);
+
+      const alpha = v * state.opacity;
+      if (alpha < 0.02) continue;
+
+      // color mix: b -> a along v
+      const cr = pal.b[0] + (pal.a[0] - pal.b[0]) * v;
+      const cg = pal.b[1] + (pal.a[1] - pal.b[1]) * v;
+      const cb = pal.b[2] + (pal.a[2] - pal.b[2]) * v;
+      ctx.fillStyle   = `rgba(${cr|0},${cg|0},${cb|0},${alpha.toFixed(3)})`;
+      ctx.strokeStyle = ctx.fillStyle;
+
+      drawCell(px, py, half, alpha);
+    }
+  }
+}
+
+function frame(now) {
+  if (!exporting) render(now * 0.001);
+
+  const sec = Math.floor(now / 1000);
+  document.getElementById('tc').textContent =
+    String((sec/3600)|0).padStart(2,'0') + ':' +
+    String(((sec/60)|0)%60).padStart(2,'0') + ':' +
+    String(sec%60).padStart(2,'0');
+
+  requestAnimationFrame(frame);
+}
+
+function drawCell(px, py, half, alpha) {
+  switch (state.pattern) {
+    case 'dot':
+      ctx.beginPath();
+      ctx.arc(px, py, half, 0, Math.PI*2);
+      ctx.fill();
+      break;
+    case 'ring':
+      ctx.lineWidth = Math.max(1, half * 0.35);
+      ctx.beginPath();
+      ctx.arc(px, py, half * 0.85, 0, Math.PI*2);
+      ctx.stroke();
+      break;
+    case 'diamond':
+      ctx.beginPath();
+      ctx.moveTo(px, py - half);
+      ctx.lineTo(px + half, py);
+      ctx.lineTo(px, py + half);
+      ctx.lineTo(px - half, py);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    case 'cross': {
+      const t = half * 0.45;
+      ctx.fillRect(px - half, py - t, half*2, t*2);
+      ctx.fillRect(px - t, py - half, t*2, half*2);
+      break;
+    }
+    case 'svg': {
+      if (!cellStamp) { ctx.fillRect(px - half, py - half, half*2, half*2); break; }
+      const s = state.cell * state.fill;
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(cellStamp, px - s/2, py - s/2, s, s);
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'block':
+    default:
+      ctx.fillRect(px - half, py - half, half*2, half*2);
+  }
+}
+
+requestAnimationFrame(frame);
+
+// ---------- UI wiring ----------
+function bindRange(id, key, fmt, transform) {
+  const el = document.getElementById(id);
+  const lbl = document.getElementById('v' + id.slice(1));
+  const apply = () => {
+    const raw = Number(el.value);
+    state[key] = transform ? transform(raw) : raw;
+    if (lbl) lbl.textContent = fmt ? fmt(state[key], raw) : raw;
+    updateReadouts();
+  };
+  el.addEventListener('input', apply);
+  apply();
+}
+
+function setSeg(key, value) {
+  state[key] = value;
+  document.querySelectorAll(`.seg[data-key="${key}"] button`).forEach(b => {
+    b.classList.toggle('on', b.dataset.v === value);
+  });
+  updateReadouts();
+}
+
+document.querySelectorAll('.seg').forEach(seg => {
+  const key = seg.dataset.key;
+  seg.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => setSeg(key, btn.dataset.v));
+  });
+});
+
+// Shape
+bindRange('rArm',   'arm');
+bindRange('rThick', 'thick');
+bindRange('rRot',   'rot', v => v + '°');
+
+// Gradient
+bindRange('rAng',      'angle',    v => v + '°');
+bindRange('rScale',    'scale',    v => v.toFixed(2), v => v / 100);
+bindRange('rContrast', 'contrast', v => v.toFixed(1), v => v / 100);
+
+// Pattern
+bindRange('rCell', 'cell');
+bindRange('rGap',  'gap');
+bindRange('rFill', 'fill', v => Math.round(v*100) + '%', v => v/100);
+bindRange('rQ',    'quant');
+
+// Wave
+bindRange('rOp',   'opacity', v => Math.round(v*100) + '%', v => v/100);
+bindRange('rAmp',  'amp',     v => Math.round(v*100) + '%', v => v/100);
+bindRange('rFreq', 'freq',    v => v.toFixed(2) + ' hz', v => v/100);
+bindRange('rDir',  'dir',     v => ['radial','horiz','vert','diag'][v]);
+
+// Export
+bindRange('rFrames', 'frames');
+
+// Palette swatches
+const sw = document.getElementById('swatches');
+function isLight(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 150;
+}
+function selectPalette(i) {
+  state.palette = i;
+  sw.querySelectorAll('.swatch').forEach((x, j) => x.classList.toggle('on', i === j));
+  document.body.classList.toggle('light', isLight(PALETTES[i].bg));
+}
+PALETTES.forEach((p, i) => {
+  const el = document.createElement('div');
+  el.className = 'swatch' + (i === 0 ? ' on' : '');
+  // preview shows the actual background with a dot in the "ink" colour
+  el.style.background =
+    `radial-gradient(circle at 50% 50%, rgb(${p.a.join(',')}) 0 42%, ${p.bg} 52% 100%)`;
+  el.title = p.name;
+  el.addEventListener('click', () => selectPalette(i));
+  sw.appendChild(el);
+});
+
+// Toolbar
+const panelEl = document.getElementById('panel');
+document.getElementById('toggleBtn').addEventListener('click', (e) => {
+  panelEl.classList.toggle('hidden');
+  e.currentTarget.classList.toggle('on', !panelEl.classList.contains('hidden'));
+});
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = 'pattern_' + Date.now() + '.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+
+document.getElementById('randomBtn').addEventListener('click', () => {
+  const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+  const rand = (min, max) => min + Math.random()*(max-min);
+
+  setSeg('shape',    pick(['cross','diamond','plus','square','circle']));
+  setSeg('gradient', pick(['radial','linear','conic','rings','noise']));
+  setSeg('pattern',  pick(['block','dot','ring','diamond','cross']));
+
+  const setRange = (id, v) => {
+    const el = document.getElementById(id);
+    el.value = v;
+    el.dispatchEvent(new Event('input'));
+  };
+  setRange('rArm',      rand(140, 320)|0);
+  setRange('rThick',    rand(20, 140)|0);
+  setRange('rRot',      rand(0, 360)|0);
+  setRange('rAng',      rand(0, 360)|0);
+  setRange('rScale',    rand(40, 200)|0);
+  setRange('rContrast', rand(60, 220)|0);
+  setRange('rCell',     rand(10, 36)|0);
+  setRange('rGap',      rand(0, 8)|0);
+  setRange('rFill',     rand(50, 100)|0);
+  setRange('rQ',        rand(3, 12)|0);
+  setRange('rOp',       rand(50, 100)|0);
+  setRange('rAmp',      rand(20, 90)|0);
+  setRange('rFreq',     rand(10, 120)|0);
+  setRange('rDir',      (Math.random()*4)|0);
+
+  selectPalette((Math.random() * PALETTES.length) | 0);
+});
+
+// ---------- SVG import ----------
+// Rasterise an uploaded SVG, fit to a square, centred and aspect-preserved.
+function fitDraw(g, img, size) {
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  let dw = size, dh = size;
+  if (iw && ih) {
+    const s = Math.min(size / iw, size / ih);
+    dw = iw * s; dh = ih * s;
+  }
+  g.clearRect(0, 0, size, size);
+  g.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh);
+}
+
+function enableSeg(key, value) {
+  const btn = document.querySelector(`.seg[data-key="${key}"] button[data-v="${value}"]`);
+  if (btn) btn.disabled = false;
+}
+
+function loadSVG(file, onReady) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload  = () => { onReady(img); URL.revokeObjectURL(url); };
+  img.onerror = () => { alert('Could not load that SVG.'); URL.revokeObjectURL(url); };
+  img.src = url;
+}
+
+function wireUpload(btnId, fileId, handler) {
+  const btn = document.getElementById(btnId);
+  const inp = document.getElementById(fileId);
+  btn.addEventListener('click', () => inp.click());
+  inp.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    loadSVG(f, img => { handler(img); btn.classList.add('loaded'); btn.textContent = '✓ ' + f.name; });
+    inp.value = '';
+  });
+}
+
+wireUpload('shapeUpload', 'shapeFile', img => {
+  const size = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  fitDraw(g, img, size);
+  const data = g.getImageData(0, 0, size, size).data;
+  const alpha = new Uint8ClampedArray(size * size);
+  for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
+  shapeMask = { alpha, size };
+  enableSeg('shape', 'svg');
+  setSeg('shape', 'svg');
+});
+
+wireUpload('cellUpload', 'cellFile', img => {
+  const size = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  fitDraw(c.getContext('2d'), img, size);
+  cellStamp = c;
+  enableSeg('pattern', 'svg');
+  setSeg('pattern', 'svg');
+});
+
+// ---------- Frame-by-frame loop export ----------
+// One wave cycle = 1 / freq seconds. Render N evenly-spaced frames across it,
+// PNG each, and bundle them into a single (store-only) zip — PNGs are already
+// compressed, so no deflate needed.
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function makeZip(files) {
+  const enc = new TextEncoder();
+  const local = [], central = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name);
+    const crc = crc32(f.data), size = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true);
+    lh.setUint16(6, 0, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, 0, true); lh.setUint16(12, 0, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, size, true); lh.setUint32(22, size, true);
+    lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    const lhB = new Uint8Array(lh.buffer);
+    local.push(lhB, name, f.data);
+
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+    ch.setUint16(8, 0, true); ch.setUint16(10, 0, true);
+    ch.setUint16(12, 0, true); ch.setUint16(14, 0, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true);
+    ch.setUint16(28, name.length, true);
+    ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+
+    offset += lhB.length + name.length + size;
+  }
+  let centralSize = 0;
+  for (const c of central) centralSize += c.length;
+  const eo = new DataView(new ArrayBuffer(22));
+  eo.setUint32(0, 0x06054b50, true);
+  eo.setUint16(8, files.length, true); eo.setUint16(10, files.length, true);
+  eo.setUint32(12, centralSize, true); eo.setUint32(16, offset, true);
+  return new Blob([...local, ...central, new Uint8Array(eo.buffer)], { type: 'application/zip' });
+}
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+const exportBtn = document.getElementById('exportBtn');
+exportBtn.addEventListener('click', async () => {
+  if (exporting) return;
+  exporting = true;
+  const label = '↓ export loop (.zip)';
+  const N = state.frames;
+  const T = state.freq > 0.001 ? 1 / state.freq : 2;   // loop length in seconds
+  const files = [];
+  try {
+    for (let i = 0; i < N; i++) {
+      render(i * (T / N));
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      files.push({ name: `frame_${String(i).padStart(3, '0')}.png`,
+                   data: new Uint8Array(await blob.arrayBuffer()) });
+      exportBtn.textContent = `rendering ${i + 1}/${N}`;
+      await new Promise(r => requestAnimationFrame(r));   // yield, keep UI alive
+    }
+    exportBtn.textContent = 'zipping…';
+    downloadBlob(makeZip(files), `pattern_loop_${Date.now()}.zip`);
+  } finally {
+    exportBtn.textContent = label;
+    exporting = false;
+  }
+});
+
+function updateReadouts() {
+  document.getElementById('dShape').textContent = state.shape;
+  document.getElementById('dGrad').textContent  = state.gradient;
+  document.getElementById('dPat').textContent   = state.pattern;
+  document.getElementById('dWave').textContent  = state.freq.toFixed(2) + ' hz';
+  const T = state.freq > 0.001 ? 1 / state.freq : 2;
+  document.getElementById('vLoopLen').textContent = T.toFixed(2) + ' s';
+}
+updateReadouts();
+</script>
+</body>
+</html>

@@ -16,6 +16,13 @@ cd "$(dirname "$0")/.."          # spostati in 00_demo/
 HTTP_PORT=8000
 BUS_PORT=8090
 
+# Pre-cleanup: ammazza eventuali processi rimasti orfani da un'esecuzione
+# precedente (es. terminale chiuso senza Ctrl+C), così le porte si liberano.
+pkill -f bus_relay.py 2>/dev/null || true
+pkill -f 'http.server' 2>/dev/null || true
+fuser -k "${HTTP_PORT}/tcp" "${BUS_PORT}/tcp" 2>/dev/null || true
+sleep 0.3
+
 # Cross-platform IP discovery: Linux/WSL first (hostname -I), then macOS.
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 [ -z "$IP" ] && IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)

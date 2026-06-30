@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOWARDS THE OTHER · ARCHIVE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  :root { --fg:#f4f4f4; --dim:#6f6f6f; --red:#ff2118; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; }
+  body { font-family: 'Space Mono', 'Courier New', monospace; color: var(--fg);
+         overflow-x: hidden; overflow-y: auto; }
+
+  /* ---- shared HUD chrome ------------------------------------------------- */
+  .hud { position: fixed; inset: 0; pointer-events: none; color: var(--fg);
+         text-transform: uppercase; z-index: 5; }
+  .corner { position: absolute; }
+  .tl-blk { top: 32px; left: 72px; }
+  .tr-blk { top: 32px; right: 72px; text-align: right; }
+  .bl-blk { bottom: 32px; left: 72px; }
+  .br-blk { bottom: 32px; right: 72px; text-align: right; }
+
+  .tag { font-size: 10px; letter-spacing: 3px; color: var(--dim); margin-bottom: 5px; }
+  .big { font-size: 20px; letter-spacing: 2px; font-weight: 700;
+         display: flex; align-items: center; gap: 13px; }
+  .tr-blk .big { justify-content: flex-end; }
+  .bval { font-size: 14px; letter-spacing: 1.5px; margin-top: 2px; }
+  .rec { width: 11px; height: 11px; border-radius: 50%; background: var(--red);
+         box-shadow: 0 0 10px var(--red); animation: blink 1.3s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .12; } }
+
+  .bracket { position: absolute; width: 40px; height: 40px; border: 1.5px solid var(--fg); opacity: .8; }
+  .b-tl { top: 100px; left: 72px; border-right: none; border-bottom: none; border-radius: 11px 0 0 0; }
+  .b-tr { top: 100px; right: 72px; border-left: none; border-bottom: none; border-radius: 0 11px 0 0; }
+  .b-bl { bottom: 100px; left: 72px; border-right: none; border-top: none; border-radius: 0 0 0 11px; }
+  .b-br { bottom: 100px; right: 72px; border-left: none; border-top: none; border-radius: 0 0 11px 0; }
+
+  .fx { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
+  .fx.scan { background: repeating-linear-gradient(to bottom,
+             rgba(255,255,255,.035) 0 1px, transparent 1px 3px); mix-blend-mode: overlay; }
+  .fx.vig { box-shadow: inset 0 0 240px 50px rgba(0,0,0,.92); }
+
+  /* ---- pill (reused from main) ------------------------------------------- */
+  .pill { pointer-events: auto; cursor: pointer; display: inline-flex;
+          align-items: center; justify-content: center; gap: 10px;
+          border: 1px solid rgba(255,255,255,.55); border-radius: 100px; padding: 9px 22px;
+          color: var(--fg); background: rgba(0,0,0,.4);
+          font: 700 11px/1 'Space Mono', monospace; letter-spacing: 3px; text-transform: uppercase;
+          transition: opacity .15s, border-color .15s, color .15s, background .15s; }
+  .pill:hover { background: rgba(255,255,255,.07); }
+  .pill.on { background: rgba(255,255,255,.10); border-color: var(--fg); color: var(--fg); }
+  .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); }
+  .pill.on .dot { background: var(--fg); box-shadow: 0 0 8px var(--fg); }
+
+  /* ---- top filter bar ---------------------------------------------------- */
+  /* top: aligned with the big text of the HUD corners (.big sits ~15px below the .tag) */
+  .top-bar { position: fixed; top: 44px; left: 50%; transform: translateX(-50%);
+             display: flex; gap: 10px; z-index: 8; flex-wrap: wrap; justify-content: center;
+             max-width: calc(100vw - 360px); }
+  .top-bar .pill { padding: 9px 16px; }
+  @media (max-width: 1100px) {
+    .top-bar { max-width: calc(100vw - 280px); }
+    .top-bar .pill { padding: 8px 12px; font-size: 10px; letter-spacing: 2px; }
+  }
+  @media (max-width: 720px) {
+    .tl-blk, .tr-blk { top: 16px; }
+    .bl-blk, .br-blk { bottom: 16px; }
+    .tl-blk, .bl-blk { left: 20px; }
+    .tr-blk, .br-blk { right: 20px; }
+    .b-tl, .b-bl { left: 20px; } .b-tr, .b-br { right: 20px; }
+    .b-tl, .b-tr { top: 80px; }  .b-bl, .b-br { bottom: 80px; }
+    .big { font-size: 13px; letter-spacing: 1.5px; gap: 6px; }
+    .tag { font-size: 9px; letter-spacing: 2px; }
+    .bracket { width: 22px; height: 22px; }
+    .top-bar { top: 70px; max-width: calc(100vw - 32px); gap: 6px; }
+    .top-bar .pill { padding: 6px 10px; font-size: 9px; letter-spacing: 1.5px; }
+    .page { padding-top: 150px; }
+  }
+
+  /* ---- main layout ------------------------------------------------------- */
+  /* page padding leaves room for HUD corners (top: 32+title, bottom: nav+rec) */
+  .page { position: relative; min-height: 100vh; padding: 130px 132px 140px;
+          display: grid; grid-template-columns: 72px minmax(0, 1fr) 280px; gap: 32px; }
+
+  @media (max-width: 1400px) { .page { padding: 130px 96px 140px; gap: 28px;
+                                       grid-template-columns: 64px minmax(0,1fr) 260px; } }
+  @media (max-width: 1100px) { .page { padding: 120px 72px 130px; gap: 24px;
+                                       grid-template-columns: 56px minmax(0,1fr);  } }
+  @media (max-width: 720px)  { .page { padding: 110px 24px 120px; gap: 18px;
+                                       grid-template-columns: 1fr; }
+                               .years { flex-direction: row; flex-wrap: wrap;
+                                        position: static; gap: 8px; padding: 0; } }
+
+  /* left rail: year selector */
+  .years { display: flex; flex-direction: column; gap: 14px; padding-top: 8px;
+           position: sticky; top: 130px; align-self: start; z-index: 2; }
+  .years .y { cursor: pointer; pointer-events: auto;
+              font-size: 11px; letter-spacing: 3px; color: var(--dim);
+              padding: 4px 0 4px 10px; text-align: left; background: none; border: 0;
+              border-left: 1px solid transparent;
+              transition: color .15s, border-color .15s; font-family: inherit; }
+  .years .y:hover { color: var(--fg); }
+  .years .y.on { color: var(--red); border-left-color: var(--red); }
+
+  /* grid of memory tiles — auto-fill so columns adapt to content width */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+          gap: 14px; align-content: start; min-width: 0; }
+  @media (max-width: 720px) { .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                                      gap: 10px; } }
+
+  .tile { position: relative; aspect-ratio: 4 / 3; border: 1px solid rgba(255,255,255,.18);
+          background: #000; overflow: hidden; cursor: pointer;
+          transition: border-color .2s; pointer-events: auto; }
+  .tile:hover { border-color: rgba(255,255,255,.55); }
+  .tile.muted { opacity: .18; pointer-events: none; }
+  .tile { transition: opacity .25s ease, border-color .2s; }
+  .tile canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  /* gradient gutters so the metadata stays legible over the spectrogram */
+  .tile::before, .tile::after { content: ''; position: absolute; left: 0; right: 0;
+                                height: 36%; pointer-events: none; }
+  .tile::before { top: 0;
+                  background: linear-gradient(to bottom, rgba(0,0,0,.85), rgba(0,0,0,0)); }
+  .tile::after  { bottom: 0;
+                  background: linear-gradient(to top,    rgba(0,0,0,.85), rgba(0,0,0,0)); }
+  .tile .meta-top, .tile .meta-bot { position: absolute; left: 10px; right: 10px;
+                    display: flex; justify-content: space-between; align-items: baseline;
+                    gap: 8px; font-size: 9px; letter-spacing: 2px; color: var(--dim);
+                    z-index: 1; }
+  .tile .meta-top { top: 8px; }
+  .tile .meta-bot { bottom: 8px; }
+  .tile .meta-top .nm, .tile .meta-bot .dur { color: var(--fg); font-weight: 700; }
+  .tile .meta-top .nm, .tile .meta-bot .loc {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .tile .meta-top .nm { flex: 1 1 auto; }
+  .tile .meta-top .date, .tile .meta-bot .dur { flex: 0 0 auto; }
+  .tile .meta-bot .loc { flex: 1 1 auto; }
+
+  /* right stat panel */
+  .stats { position: sticky; top: 130px; align-self: start;
+           border: 1px solid rgba(255,255,255,.3);
+           padding: 22px 22px 24px; background: rgba(0,0,0,.6);
+           display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  @media (max-width: 1100px) { .stats { display: none; } }
+  .stats h2 { font-size: 11px; letter-spacing: 3px; font-weight: 700;
+              text-transform: uppercase; padding-bottom: 10px;
+              border-bottom: 1px solid rgba(255,255,255,.15); }
+  .stats .kv { display: flex; justify-content: space-between; gap: 8px;
+               font-size: 11px; letter-spacing: 1.5px; }
+  .stats .kv b { color: var(--dim); font-weight: 400; text-transform: uppercase; }
+  .stats .grp h3 { font-size: 9px; letter-spacing: 3px; color: var(--dim);
+                   text-transform: uppercase; margin-bottom: 6px; font-weight: 400; }
+  .stats .lst { display: flex; flex-direction: column; gap: 4px; font-size: 11px;
+                letter-spacing: 1px; }
+  .stats .lst .row { display: flex; justify-content: space-between; gap: 8px; }
+  .stats .lst .row b { color: var(--dim); font-weight: 400; font-size: 9px; }
+
+  /* ---- detail overlay ---------------------------------------------------- */
+  .detail { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+            background: rgba(0,0,0,.85); z-index: 10; pointer-events: auto; padding: 60px; }
+  .detail.show { display: flex; }
+  .detail-card { width: min(900px, 92vw); border: 1px solid rgba(255,255,255,.35);
+                 background: #000; display: grid; grid-template-columns: 1.4fr 1fr;
+                 max-height: 86vh; }
+  @media (max-width: 720px) { .detail-card { grid-template-columns: 1fr; } }
+  .detail-viz { position: relative; aspect-ratio: 4/3; border-right: 1px solid rgba(255,255,255,.15); }
+  .detail-viz canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .detail-info { padding: 28px 28px; display: flex; flex-direction: column; gap: 18px; }
+  .detail-info .nm { font-size: 18px; letter-spacing: 2px; font-weight: 700; }
+  .detail-info .sub { font-size: 10px; letter-spacing: 3px; color: var(--dim); }
+  .detail-info .kvs { display: flex; flex-direction: column; gap: 6px;
+                      font-size: 11px; letter-spacing: 1.5px; }
+  .detail-info .kvs .row { display: flex; justify-content: space-between; gap: 12px; }
+  .detail-info .kvs .row b { color: var(--dim); font-weight: 400; text-transform: uppercase; font-size: 10px; }
+  .detail-info .actions { display: flex; gap: 10px; margin-top: 8px; }
+
+  /* ---- bottom nav -------------------------------------------------------- */
+  .nav { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%);
+         display: flex; gap: 10px; align-items: center; z-index: 8; pointer-events: auto; }
+
+  a, button { color: inherit; }
+  a.pill { text-decoration: none; }
+</style>
+</head>
+<body>
+
+  <div class="fx vig"></div>
+  <div class="fx scan"></div>
+
+  <div class="hud">
+    <div class="corner tl-blk">
+      <div class="tag">// archive</div>
+      <div class="big">GUEST.03</div>
+    </div>
+    <div class="corner tr-blk">
+      <div class="tag">cat <span id="tc">128</span></div>
+      <div class="big">TOWARDS THE OTHER <span class="rec"></span></div>
+    </div>
+
+    <div class="bracket b-tl"></div>
+    <div class="bracket b-tr"></div>
+    <div class="bracket b-bl"></div>
+    <div class="bracket b-br"></div>
+
+    <div class="corner bl-blk">
+      <div class="tag">// source</div>
+      <div class="bval">archive.library</div>
+    </div>
+    <div class="corner br-blk">
+      <div class="tag">// entries</div>
+      <div class="bval"><span id="visCount">128</span> recordings</div>
+    </div>
+  </div>
+
+  <!-- top: category filter -->
+  <div class="top-bar" id="filters">
+    <button class="pill on" data-cat="all"><span class="dot"></span> all</button>
+    <button class="pill" data-cat="bird">bird</button>
+    <button class="pill" data-cat="mammal">mammal</button>
+    <button class="pill" data-cat="amphibian">amphibian</button>
+    <button class="pill" data-cat="insect">insect</button>
+  </div>
+
+  <!-- bottom: back -->
+  <div class="nav">
+    <a class="pill" href="index.html">‹ live</a>
+  </div>
+
+  <div class="page">
+    <div class="years" id="years"></div>
+    <div class="grid" id="grid"></div>
+    <aside class="stats" id="stats">
+      <h2 id="statsTitle">archive · all</h2>
+      <div class="kv"><span>recordings</span><b id="sCount">—</b></div>
+      <div class="kv"><span>total minutes</span><b id="sMins">—</b></div>
+      <div class="kv"><span>unique species</span><b id="sUniq">—</b></div>
+      <div class="kv"><span>last entry</span><b id="sLast">—</b></div>
+
+      <div class="grp">
+        <h3>top 5 species</h3>
+        <div class="lst" id="topSpecies"></div>
+      </div>
+      <div class="grp">
+        <h3>top 5 locations</h3>
+        <div class="lst" id="topLocs"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- detail overlay -->
+  <div class="detail" id="detail">
+    <div class="detail-card">
+      <div class="detail-viz"><canvas id="detailCanvas"></canvas></div>
+      <div class="detail-info">
+        <div>
+          <div class="sub" id="dCat">// bird</div>
+          <div class="nm" id="dName">—</div>
+        </div>
+        <div class="kvs">
+          <div class="row"><b>duration</b><span id="dDur">—</span></div>
+          <div class="row"><b>date</b><span id="dDate">—</span></div>
+          <div class="row"><b>location</b><span id="dLoc">—</span></div>
+          <div class="row"><b>distance</b><span id="dDist">—</span></div>
+          <div class="row"><b>peak freq</b><span id="dFreq">—</span></div>
+          <div class="row"><b>seq</b><span id="dSeq">—</span></div>
+        </div>
+        <div class="actions">
+          <button class="pill on" id="dPlay"><span class="dot"></span> playback</button>
+          <button class="pill" id="dClose">close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// === FAKE ARCHIVE ============================================================
+// 128 fake recordings — deterministic, so the procedural spectrograms are
+// stable between reloads.
+
+const SPECIES = [
+  { nm: 'MOURNING_DOVE',     cat: 'bird',      lo: 400,  hi: 900  },
+  { nm: 'BARRED_OWL',        cat: 'bird',      lo: 220,  hi: 700  },
+  { nm: 'GREAT_HORNED_OWL',  cat: 'bird',      lo: 180,  hi: 520  },
+  { nm: 'AMERICAN_CROW',     cat: 'bird',      lo: 600,  hi: 1800 },
+  { nm: 'COMMON_LOON',       cat: 'bird',      lo: 300,  hi: 1100 },
+  { nm: 'WHIPPOORWILL',      cat: 'bird',      lo: 1100, hi: 2400 },
+  { nm: 'BLACK_CHICKADEE',   cat: 'bird',      lo: 2000, hi: 4500 },
+  { nm: 'COMMON_RAVEN',      cat: 'bird',      lo: 400,  hi: 1400 },
+  { nm: 'SCREECH_OWL',       cat: 'bird',      lo: 800,  hi: 2200 },
+  { nm: 'GREAT_BLUE_HERON',  cat: 'bird',      lo: 240,  hi: 900  },
+  { nm: 'GRAY_WOLF',         cat: 'mammal',    lo: 150,  hi: 800  },
+  { nm: 'RED_FOX',           cat: 'mammal',    lo: 350,  hi: 1500 },
+  { nm: 'COYOTE',            cat: 'mammal',    lo: 400,  hi: 2200 },
+  { nm: 'BLACK_BEAR',        cat: 'mammal',    lo: 90,   hi: 380  },
+  { nm: 'ELK_BUGLE',         cat: 'mammal',    lo: 320,  hi: 1700 },
+  { nm: 'MOUNTAIN_LION',     cat: 'mammal',    lo: 500,  hi: 1800 },
+  { nm: 'BOBCAT',            cat: 'mammal',    lo: 600,  hi: 2200 },
+  { nm: 'WHITETAIL_DEER',    cat: 'mammal',    lo: 180,  hi: 720  },
+  { nm: 'AMERICAN_BEAVER',   cat: 'mammal',    lo: 120,  hi: 420  },
+  { nm: 'RIVER_OTTER',       cat: 'mammal',    lo: 800,  hi: 3200 },
+  { nm: 'BULLFROG',          cat: 'amphibian', lo: 180,  hi: 480  },
+  { nm: 'GREEN_TREEFROG',    cat: 'amphibian', lo: 1800, hi: 3200 },
+  { nm: 'SPRING_PEEPER',     cat: 'amphibian', lo: 2400, hi: 3600 },
+  { nm: 'WOOD_FROG',         cat: 'amphibian', lo: 220,  hi: 900  },
+  { nm: 'DESERT_TOAD',       cat: 'amphibian', lo: 600,  hi: 1900 },
+  { nm: 'FIELD_CRICKET',     cat: 'insect',    lo: 3200, hi: 5400 },
+  { nm: 'KATYDID',           cat: 'insect',    lo: 4400, hi: 7800 },
+  { nm: 'CICADA_DUSK',       cat: 'insect',    lo: 2400, hi: 6200 },
+  { nm: 'MOTH_WINGBEAT',     cat: 'insect',    lo: 40,   hi: 220  },
+  { nm: 'BUMBLEBEE',         cat: 'insect',    lo: 180,  hi: 500  },
+];
+
+const LOCS = [
+  'Ridge NE-12', 'Pine Bog · 4',  'Creek W-08',   'Meadow S-03',
+  'Salt Flat-2', 'Marsh E-19',    'Spruce 17',    'Lake Boundary',
+  'Quarry-N',    'Dunes-04',      'Old Trail-7',  'Cedar Stand',
+];
+
+// tiny seeded PRNG so reloads are deterministic
+function mulberry32(s) {
+  return function() {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = s ^ (s >>> 15); t = Math.imul(t, 1 | t);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+const MONTHS_IT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+
+function buildArchive() {
+  const rnd = mulberry32(202406);
+  const arr = [];
+  const years = [2019, 2020, 2021, 2022, 2023, 2024];
+  for (let i = 0; i < 128; i++) {
+    const sp  = SPECIES[Math.floor(rnd() * SPECIES.length)];
+    const yr  = years[Math.floor(rnd() * years.length)];
+    const mo  = 1 + Math.floor(rnd() * 12);
+    const dy  = 1 + Math.floor(rnd() * 28);
+    const dur = 8 + Math.floor(rnd() * 540);                 // seconds
+    const dist = Math.floor(rnd() * rnd() * 1400);
+    const loc = LOCS[Math.floor(rnd() * LOCS.length)];
+    arr.push({
+      id: i + 1, sp, yr, mo, dy, dur, dist, loc,
+      seed: Math.floor(rnd() * 1e9),
+      peakHz: Math.floor(sp.lo + rnd() * (sp.hi - sp.lo)),
+    });
+  }
+  // newest first
+  arr.sort((a, b) => (b.yr - a.yr) || (b.mo - a.mo) || (b.dy - a.dy));
+  return arr;
+}
+
+const ARCHIVE = buildArchive();
+
+// === TILE RENDER =============================================================
+const RAMP = ' .:-=+*oO#%';
+
+function hueFor(hz) {
+  const HZ_MIN = 120, HZ_MAX = 9000;
+  const t = Math.max(0, Math.min(1,
+    (Math.log(Math.max(hz, HZ_MIN)) - Math.log(HZ_MIN)) /
+    (Math.log(HZ_MAX) - Math.log(HZ_MIN))));
+  return t * 245;
+}
+
+// Draw a static "memory" spectrogram for one record on its canvas.
+function paintTile(canvas, rec, opts) {
+  opts = opts || {};
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  canvas.width  = w * dpr;
+  canvas.height = h * dpr;
+  const c = canvas.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.fillStyle = '#000';
+  c.fillRect(0, 0, w, h);
+
+  const rnd = mulberry32(rec.seed);
+  const baseHue = hueFor(rec.peakHz);
+
+  // horizontal bands — like spectrogram slices
+  const rows = opts.rows || 14;
+  const cols = opts.cols || 42;
+  const cellW = w / cols, cellH = h / rows;
+  const fs = Math.max(6, Math.min(18, cellH * 0.95));
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.font = fs.toFixed(1) + "px 'Courier New', monospace";
+
+  // each row has its own slowly-shifted phase
+  for (let r = 0; r < rows; r++) {
+    const rowSeed = (rec.seed ^ (r * 9277)) >>> 0;
+    const rr = mulberry32(rowSeed);
+    const phase = rr() * Math.PI * 2;
+    const freq  = 0.18 + rr() * 0.35;
+    const burst = rr() * 0.6 + 0.2;      // overall density for this row
+    const hueShift = (r - rows/2) * 4;
+    for (let i = 0; i < cols; i++) {
+      const a = phase + i * freq;
+      // amplitude = bursty noise * sine envelope
+      const env = Math.max(0, Math.sin(a)) * burst;
+      const n = rr();
+      const amp = env * (0.5 + n * 0.8);
+      if (amp < 0.12) continue;
+      const idx = Math.min(RAMP.length - 1, Math.floor(amp * RAMP.length));
+      const glyph = RAMP[idx];
+      const x = (i + 0.5) * cellW;
+      const y = (r + 0.5) * cellH;
+      const al = Math.min(1, 0.35 + amp * 0.75);
+      const hue = baseHue + hueShift + (n - 0.5) * 30;
+      c.shadowColor = `hsla(${hue}, 95%, 60%, ${al.toFixed(2)})`;
+      c.shadowBlur  = opts.glow ? 4 + amp * 8 : 0;
+      c.fillStyle   = `hsla(${hue}, 90%, ${(54 + amp * 22).toFixed(0)}%, ${al.toFixed(2)})`;
+      c.fillText(glyph, x, y);
+    }
+  }
+  c.shadowBlur = 0;
+}
+
+// === RENDER ARCHIVE ==========================================================
+const gridEl   = document.getElementById('grid');
+const yearsEl  = document.getElementById('years');
+const filtersEl = document.getElementById('filters');
+
+let filterCat  = 'all';
+let filterYear = 'all';
+
+function durFmt(s) { return Math.floor(s / 60) + ':' + pad2(s % 60); }
+function dateFmt(r) { return r.yr + '·' + pad2(r.mo) + '·' + pad2(r.dy); }
+function distFmt(d) { return d < 50 ? '0 m' : (d + ' m'); }
+
+function buildTile(rec) {
+  const el = document.createElement('div');
+  el.className = 'tile';
+  el.dataset.cat  = rec.sp.cat;
+  el.dataset.year = rec.yr;
+  el.innerHTML =
+    '<canvas></canvas>' +
+    '<div class="meta-top"><span class="nm">' + rec.sp.nm + '</span>' +
+                          '<span class="date">' + MONTHS_IT[rec.mo - 1] + ' ' + rec.yr + '</span></div>' +
+    '<div class="meta-bot"><span class="loc">' + rec.loc + '</span>' +
+                          '<span class="dur">' + durFmt(rec.dur) + '</span></div>';
+  el.addEventListener('click', () => openDetail(rec));
+  return el;
+}
+
+function buildYears() {
+  const yrs = [...new Set(ARCHIVE.map(r => r.yr))].sort((a,b)=>b-a);
+  yearsEl.innerHTML = '';
+  const all = document.createElement('button');
+  all.className = 'y on'; all.textContent = 'ALL'; all.dataset.year = 'all';
+  yearsEl.appendChild(all);
+  for (const y of yrs) {
+    const b = document.createElement('button');
+    b.className = 'y'; b.textContent = y; b.dataset.year = y;
+    yearsEl.appendChild(b);
+  }
+  yearsEl.addEventListener('click', e => {
+    const t = e.target.closest('.y'); if (!t) return;
+    filterYear = t.dataset.year === 'all' ? 'all' : Number(t.dataset.year);
+    yearsEl.querySelectorAll('.y').forEach(b => b.classList.toggle('on', b === t));
+    applyFilter();
+  });
+}
+
+filtersEl.addEventListener('click', e => {
+  const t = e.target.closest('[data-cat]'); if (!t) return;
+  filterCat = t.dataset.cat;
+  filtersEl.querySelectorAll('[data-cat]').forEach(b => b.classList.toggle('on', b === t));
+  applyFilter();
+});
+
+function applyFilter() {
+  let visible = 0;
+  for (const tile of gridEl.children) {
+    const okC = filterCat === 'all'  || tile.dataset.cat === filterCat;
+    const okY = filterYear === 'all' || Number(tile.dataset.year) === filterYear;
+    const on  = okC && okY;
+    tile.classList.toggle('muted', !on);
+    if (on) visible++;
+  }
+  document.getElementById('visCount').textContent = visible;
+  document.getElementById('tc').textContent = visible;
+  paintStats();
+}
+
+function repaintAll() {
+  let i = 0;
+  for (const r of ARCHIVE) {
+    paintTile(gridEl.children[i++].querySelector('canvas'), r);
+  }
+}
+
+function paintStats() {
+  const rs = ARCHIVE.filter(r =>
+    (filterCat === 'all'  || r.sp.cat === filterCat) &&
+    (filterYear === 'all' || r.yr === filterYear));
+  document.getElementById('statsTitle').textContent =
+    'archive · ' + (filterYear === 'all' ? 'all years' : filterYear) +
+    (filterCat === 'all' ? '' : ' · ' + filterCat);
+  document.getElementById('sCount').textContent = rs.length;
+  document.getElementById('sMins').textContent =
+    Math.round(rs.reduce((a, r) => a + r.dur, 0) / 60);
+  document.getElementById('sUniq').textContent =
+    new Set(rs.map(r => r.sp.nm)).size;
+  const last = rs[0];
+  document.getElementById('sLast').textContent = last ? dateFmt(last) : '—';
+
+  const tally = (arr, key) => {
+    const m = new Map();
+    for (const r of arr) m.set(key(r), (m.get(key(r)) || 0) + 1);
+    return [...m].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  };
+
+  const topSp = tally(rs, r => r.sp.nm);
+  document.getElementById('topSpecies').innerHTML =
+    topSp.map(([n, c]) => `<div class="row"><span>${n}</span><b>${c}×</b></div>`).join('')
+    || '<div class="row"><b>no entries</b><span></span></div>';
+
+  const topLo = tally(rs, r => r.loc);
+  document.getElementById('topLocs').innerHTML =
+    topLo.map(([n, c]) => `<div class="row"><span>${n}</span><b>${c}×</b></div>`).join('')
+    || '<div class="row"><b>no entries</b><span></span></div>';
+}
+
+// initial render
+buildYears();
+for (const r of ARCHIVE) gridEl.appendChild(buildTile(r));
+// paint tile canvases after layout has settled so clientWidth is non-zero
+requestAnimationFrame(() => {
+  let i = 0;
+  for (const r of ARCHIVE) {
+    const c = gridEl.children[i++].querySelector('canvas');
+    paintTile(c, r);
+  }
+});
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(repaintAll, 120);
+});
+applyFilter();
+
+// === DETAIL OVERLAY ==========================================================
+const detail   = document.getElementById('detail');
+const detCanv  = document.getElementById('detailCanvas');
+function openDetail(rec) {
+  document.getElementById('dCat').textContent  = '// ' + rec.sp.cat;
+  document.getElementById('dName').textContent = rec.sp.nm;
+  document.getElementById('dDur').textContent  = durFmt(rec.dur);
+  document.getElementById('dDate').textContent = dateFmt(rec);
+  document.getElementById('dLoc').textContent  = rec.loc;
+  document.getElementById('dDist').textContent = distFmt(rec.dist);
+  document.getElementById('dFreq').textContent = rec.peakHz + ' Hz';
+  document.getElementById('dSeq').textContent  = '#' + pad2(rec.id);
+  detail.classList.add('show');
+  requestAnimationFrame(() => paintTile(detCanv, rec, { rows: 22, cols: 70, glow: true }));
+}
+document.getElementById('dClose').addEventListener('click', () => detail.classList.remove('show'));
+detail.addEventListener('click', e => { if (e.target === detail) detail.classList.remove('show'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') detail.classList.remove('show'); });
+
+// `playback` button is a stub for now — no real files yet.
+document.getElementById('dPlay').addEventListener('click', e => {
+  const b = e.currentTarget;
+  b.classList.toggle('on');
+  b.firstElementChild && b.firstElementChild.classList.toggle('dot');
+});
+</script>
+</body>
+</html>
