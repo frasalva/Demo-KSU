@@ -357,8 +357,6 @@ function buildArchive() {
 const ARCHIVE = buildArchive();
 
 // === TILE RENDER =============================================================
-const RAMP = ' .:-=+*oO#%';
-
 function hueFor(hz) {
   const HZ_MIN = 120, HZ_MAX = 9000;
   const t = Math.max(0, Math.min(1,
@@ -380,43 +378,46 @@ function paintTile(canvas, rec, opts) {
   c.fillStyle = '#000';
   c.fillRect(0, 0, w, h);
 
-  const rnd = mulberry32(rec.seed);
   const baseHue = hueFor(rec.peakHz);
 
-  // horizontal bands — like spectrogram slices
-  const rows = opts.rows || 14;
-  const cols = opts.cols || 42;
+  // horizontal dot-waveform: time runs left→right; amplitude mirrors above/below
+  // a center spine, so a loud moment "grows" a taller column of dots — a
+  // simplified sound wave rendered in the same bubble pattern as the live pages.
+  const rows = opts.rows || 15;                  // keep ODD so there's a center spine row
+  const cols = opts.cols || 42;                  // time resolution (lower = chunkier wave)
   const cellW = w / cols, cellH = h / rows;
-  const fs = Math.max(6, Math.min(18, cellH * 0.95));
-  c.textAlign = 'center';
-  c.textBaseline = 'middle';
-  c.font = fs.toFixed(1) + "px 'Courier New', monospace";
+  const dotMax = Math.min(cellW, cellH) * 0.5;   // radius cap → dots never overlap
+  const midY = h / 2;
 
-  // each row has its own slowly-shifted phase
-  for (let r = 0; r < rows; r++) {
-    const rowSeed = (rec.seed ^ (r * 9277)) >>> 0;
-    const rr = mulberry32(rowSeed);
-    const phase = rr() * Math.PI * 2;
-    const freq  = 0.18 + rr() * 0.35;
-    const burst = rr() * 0.6 + 0.2;      // overall density for this row
-    const hueShift = (r - rows/2) * 4;
-    for (let i = 0; i < cols; i++) {
-      const a = phase + i * freq;
-      // amplitude = bursty noise * sine envelope
-      const env = Math.max(0, Math.sin(a)) * burst;
-      const n = rr();
-      const amp = env * (0.5 + n * 0.8);
-      if (amp < 0.12) continue;
-      const idx = Math.min(RAMP.length - 1, Math.floor(amp * RAMP.length));
-      const glyph = RAMP[idx];
-      const x = (i + 0.5) * cellW;
+  // deterministic waveform envelope for this record (stable across reloads)
+  const rr = mulberry32(rec.seed);
+  const p1 = rr() * Math.PI * 2, f1 = 1.5 + rr() * 3.0;   // wave body
+  const p2 = rr() * Math.PI * 2, f2 = 4.0 + rr() * 7.0;   // fine detail
+  const p3 = rr() * Math.PI * 2, f3 = 0.4 + rr() * 1.4;   // slow loud/quiet sections
+
+  for (let i = 0; i < cols; i++) {
+    const t = i / (cols - 1);
+    const gate   = 0.35 + 0.65 * Math.abs(Math.sin(p3 + t * Math.PI * 2 * f3));
+    const wobble = 0.7 * Math.abs(Math.sin(p1 + t * Math.PI * 2 * f1))
+                 + 0.3 * Math.abs(Math.sin(p2 + t * Math.PI * 2 * f2));
+    const amp = Math.pow(gate * wobble, 1.15);   // 0..1 loudness at this time-slice
+    const x = (i + 0.5) * cellW;
+    const reach = amp * (rows - 1) / 2;          // cells up/down from the spine
+
+    for (let r = 0; r < rows; r++) {
       const y = (r + 0.5) * cellH;
-      const al = Math.min(1, 0.35 + amp * 0.75);
-      const hue = baseHue + hueShift + (n - 0.5) * 30;
+      const distCells = Math.abs(y - midY) / cellH;
+      if (distCells > reach && distCells > 0.5) continue;         // outside wave (spine always on)
+      const edge = reach > 0 ? Math.max(0, 1 - distCells / reach) : 1;  // 1 at spine → 0 at tip
+      const al   = Math.min(1, (0.30 + 0.70 * edge) * (0.45 + amp));
+      const hue  = baseHue + (amp - 0.5) * 36;
+      const radius = dotMax * (0.35 + 0.65 * edge);   // DOT SIZE: bigger on the spine, small at tips
       c.shadowColor = `hsla(${hue}, 95%, 60%, ${al.toFixed(2)})`;
-      c.shadowBlur  = opts.glow ? 4 + amp * 8 : 0;
-      c.fillStyle   = `hsla(${hue}, 90%, ${(54 + amp * 22).toFixed(0)}%, ${al.toFixed(2)})`;
-      c.fillText(glyph, x, y);
+      c.shadowBlur  = opts.glow ? 4 + edge * 8 : 0;
+      c.fillStyle   = `hsla(${hue}, 90%, ${(56 + amp * 18).toFixed(0)}%, ${al.toFixed(2)})`;
+      c.beginPath();
+      c.arc(x, y, radius, 0, Math.PI * 2);
+      c.fill();
     }
   }
   c.shadowBlur = 0;
@@ -559,7 +560,7 @@ function openDetail(rec) {
   document.getElementById('dFreq').textContent = rec.peakHz + ' Hz';
   document.getElementById('dSeq').textContent  = '#' + pad2(rec.id);
   detail.classList.add('show');
-  requestAnimationFrame(() => paintTile(detCanv, rec, { rows: 22, cols: 70, glow: true }));
+  requestAnimationFrame(() => paintTile(detCanv, rec, { rows: 21, cols: 90, glow: true }));
 }
 document.getElementById('dClose').addEventListener('click', () => detail.classList.remove('show'));
 detail.addEventListener('click', e => { if (e.target === detail) detail.classList.remove('show'); });

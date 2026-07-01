@@ -7,7 +7,7 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
   :root { --fg:#f4f4f4; --dim:#6f6f6f; --red:#ff2118; }
- 
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
   body { font-family: 'Space Mono', 'Courier New', monospace; color: var(--fg); }
@@ -204,6 +204,7 @@ const deviceLabels = [
   document.getElementById('lbl2'),
 ];
 
+const RAMP = " .:-=+*oO#%";
 const FONT = 12;
 
 // === CONFIG: sample files + center "Playback" source ========================
@@ -327,7 +328,7 @@ resize();
 const MAX_NODES = 520;
 const SPAWN_MS  = 50;
 const THRESH    = 0.015;   // lowered (was 0.035) — combined with sensitivity
-const SPREAD_X  = 980;
+const SPREAD_X  = 520;
 const SPREAD_Y  = 480;
 const SPREAD_Z  = 520;
 const JITTER    = 26;
@@ -386,10 +387,11 @@ function analyse(now) {
     const node = {
       seq: seqCounter++,
       x: (centroid - 0.5) * SPREAD_X + (Math.random() - 0.5) * JITTER,
-      y: -(level - 0.08) * 750 + (Math.random() - 0.5) * JITTER,
+      y: -(level - 0.08) * 2200 + (Math.random() - 0.5) * JITTER,
       z: (spread - 0.4) * SPREAD_Z + (Math.random() - 0.5) * JITTER,
       energy, p: null,
       hue: hzToHue(domHz || (HZ_MIN + centroid * (HZ_MAX - HZ_MIN))),
+      glyph: RAMP[Math.min(RAMP.length - 1, Math.floor((0.25 + energy * 0.75) * RAMP.length))],
     };
     const near = [];
     for (const m of nodes) {
@@ -414,7 +416,6 @@ const FOV = 470;
 let yaw = 0.4;
 const PITCH = 0.32;
 let focusX = 0, focusY = 0, focusZ = 0;
-let cloudSpread = 200;   // running mean node-distance from center (for opacity fade)
 let CX = 0, CY = 0;
 
 function project(x, y, z, cosA, sinA, cosB, sinB) {
@@ -569,24 +570,18 @@ function drawViz(cosA, sinA, cosB, sinB) {
   for (let i = 0; i < nodes.length; i++) if (nodes[i].p) order.push(i);
   order.sort((i, j) => nodes[j].p.zc - nodes[i].p.zc);
 
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   for (const i of order) {
     const n = nodes[i], p = n.p;
     if (p.s < 0.04) continue;
-    // glyph -> dot: each node is a filled circle whose radius tracks the old
-    // font size; hue / glow / alpha (frequency colour) stay exactly the same.
-    const fs = Math.max(3, Math.min(16, FONT * (0.6 + n.energy * 1.0) * p.s));
-    const radius = fs * 0.34;   // DOT SIZE: lower this factor / the 16 cap = smaller dots
-    // smooth opacity falloff: dots far from the cloud center fade out (no dither)
-    const ddx = n.x - focusX, ddy = n.y - focusY, ddz = n.z - focusZ;
-    const dCenter = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
-    const radialFade = Math.pow(Math.max(0, 1 - dCenter / (cloudSpread * 2.2)), 1.3);
-    const alpha = Math.max(0.06, Math.min(1, p.s)) * (0.45 + 0.55 * n.energy) * radialFade;
+    const fs = Math.max(5, Math.min(26, FONT * (0.7 + n.energy * 1.1) * p.s));
+    const alpha = Math.max(0.06, Math.min(1, p.s)) * (0.45 + 0.55 * n.energy);
+    ctx.font = fs.toFixed(1) + "px 'Courier New', monospace";
     ctx.shadowColor = `hsla(${n.hue}, 95%, 60%, ${alpha.toFixed(3)})`;
     ctx.shadowBlur = 5 + n.energy * 16 * p.s;
     ctx.fillStyle = `hsla(${n.hue}, 92%, ${(56 + n.energy * 16).toFixed(0)}%, ${alpha.toFixed(3)})`;
-    ctx.beginPath();
-    ctx.arc(p.sx, p.sy, radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillText(n.glyph, p.sx, p.sy);
   }
   ctx.shadowBlur = 0;
   ctx.restore();
@@ -618,7 +613,6 @@ function frame(now) {
     let dsum = 0;
     for (const n of nodes) dsum += Math.hypot(n.x - mx, n.y - my, n.z - mz);
     const meanDist = dsum / nodes.length;
-    cloudSpread += (meanDist - cloudSpread) * 0.05;
     focusX += (mx - focusX) * 0.04;
     focusY += (my - focusY) * 0.04;
     focusZ += (mz - focusZ) * 0.04;
